@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useAccount, useWalletClient, usePublicClient } from "wagmi";
 import { 
   ArrowLeft, Users, Clock, Loader2, Send, ShieldCheck, 
-  Coins, Sparkles, CheckCircle2, AlertTriangle, X, Zap
+  Coins, Sparkles, CheckCircle2, AlertTriangle, X, Zap,
+  ExternalLink, RotateCcw, Check, RefreshCw, LayoutGrid
 } from "lucide-react";
 import { WalletConnectButton } from "@/components/WalletConnectButton";
 import { useJoinSwarm } from "@/hooks/useJoinSwarm";
@@ -34,6 +35,7 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
   const [task, setTask] = useState<SwarmTask | null>(null);
   const [submissions, setSubmissions] = useState<SwarmSubmission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"GRAPH" | "MANUAL">("GRAPH");
 
   // Form State
   const [resultText, setResultText] = useState("");
@@ -49,6 +51,7 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
   const [payingOutId, setPayingOutId] = useState<string | null>(null);
   const [refundingId, setRefundingId] = useState<string | null>(null);
   const [overridingId, setOverridingId] = useState<string | null>(null);
+  const [rejoining, setRejoining] = useState(false);
   const [triggeringReport, setTriggeringReport] = useState(false);
   const [payoutStatusText, setPayoutStatusText] = useState<string | null>(null);
   const [payoutSuccessMsg, setPayoutSuccessMsg] = useState<string | null>(null);
@@ -85,9 +88,6 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
   const slotsAvailable = (task?.maxWorkers || 0) - slotsUsed;
   const canJoin = !hasJoined && slotsAvailable > 0 && (task?.status === "OPEN" || task?.status === "IN_PROGRESS") && !isRequester;
 
-  // Anything awaiting a decision from the requester:
-  //  - SUBMITTED: AI gave REVIEW/manual verdict, requester must approve or reject
-  //  - VERIFIED:   AI gave PASS, requester must now trigger the on-chain payout
   const reviewQueue = submissions.filter(s => {
     const st = s.status?.toUpperCase();
     return st === "SUBMITTED" || st === "VERIFIED";
@@ -97,13 +97,10 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
   const paidOutCount = submissions.filter(s => s.status === "PAID_OUT").length;
   const refundedCount = submissions.filter(s => s.status === "REFUNDED").length;
   const verifiedCount = submissions.filter(s => s.status === "VERIFIED" || s.status === "PAID_OUT").length;
-  // Backwards-compat alias used by the floating action center below.
   const pendingSubmissions = reviewQueue;
 
   const showSwarmComplete = task?.status === "COMPLETED" && paidOutCount > 0 && paidOutCount === verifiedCount;
 
-  // Auto-open the action center the first time the requester sees items
-  // needing review, so they never miss a pending payout / override.
   useEffect(() => {
     if (isRequester && reviewQueue.length > 0) {
       setShowActionCenter(true);
@@ -120,6 +117,30 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
     await fetchTask();
   }
 
+  async function handleRejoin() {
+    if (!task || !userAddress) return;
+    setRejoining(true);
+    try {
+      const res = await fetch("/api/swarm/" + task.id + "/rejoin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workerAddress: userAddress }),
+      });
+      const json = await res.json();
+      if (json.data) {
+        setTask(json.data);
+        setSubmissions(json.data.submissions || []);
+      }
+      // Clear form inputs for fresh entry
+      setResultText("");
+      setResultAttachmentUrl("");
+    } catch (err) {
+      console.error("Rejoin error:", err);
+    } finally {
+      setRejoining(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!task || !userAddress) return;
@@ -131,7 +152,7 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
       resultAttachmentUrl: resultAttachmentUrl || null,
     });
     await fetchTask();
-    setSelectedNode(null); // Close sidebar after submit
+    setSelectedNode(null);
   }
 
   async function handleGenerateReport() {
@@ -152,11 +173,6 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
       const target = submissions.find((s) => s.id === submissionId);
 
       if (action === "APPROVE") {
-        // Path 1: AI already auto-verified → just execute the on-chain payout.
-        // Path 2: Submission is still SUBMITTED → override to VERIFIED first,
-        //         then send the funds in the same requester action.
-        const alreadyVerified = target?.status?.toUpperCase() === "VERIFIED";
-
         let hash: `0x${string}` | "" = "";
         if (walletClient && publicClient && target?.workerAddress) {
           try {
@@ -179,7 +195,7 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
           body: JSON.stringify({ submissionId, requesterAddress: userAddress, txHash: hash }),
         });
       } else {
-        // REJECT: never touch the chain — just record the override.
+        // REJECT
         await fetch("/api/swarm/" + task.id + "/override", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -189,7 +205,7 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
       await fetchTask();
     } catch (err) {
       console.error(err);
-      alert("Transaction failed or rejected.");
+      alert("Action failed. Check network connection.");
     } finally {
       setOverridingId(null);
     }
@@ -198,7 +214,7 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
   async function handleReleasePayout(payoutAll = true) {
     if (!task || !userAddress) return;
     setPayingOutId(payoutAll ? "all" : "single");
-    setPayoutStatusText("Signing...");
+    setPayoutStatusText("Signing transfer on Monad...");
     
     try {
       const targets = eligibleForPayout;
@@ -230,7 +246,7 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
         }),
       });
 
-      setPayoutSuccessMsg("Payouts released successfully");
+      setPayoutSuccessMsg("Payouts released successfully on Monad");
       await fetchTask();
       setTimeout(() => setPayoutSuccessMsg(null), 3000);
     } finally {
@@ -271,431 +287,541 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
     );
   }
 
-  // Find the selected submission if a human node is clicked
   const selectedSubmission = selectedNode?.type === "human" 
     ? submissions.find(s => s.id === selectedNode.data.submissionId)
     : null;
 
   return (
-    <div className="w-full h-screen bg-[#0A0A0A] overflow-hidden relative font-sans">
+    <div className="w-full min-h-screen bg-[#0A0A0A] font-sans flex flex-col text-[#F4F3EE]">
       
-      {/* 1. Main Graph Engine (Background) */}
-      <div className="absolute inset-0 z-0">
-        <SwarmGraph 
-          task={task} 
-          submissions={submissions} 
-          onNodeClick={(node) => setSelectedNode(node)} 
-        />
-      </div>
-
-      {/* 2. Top Navigation Overlay */}
-      <div className="absolute top-0 left-0 right-0 p-4 z-10 flex justify-between items-start pointer-events-none">
-        <div className="pointer-events-auto">
-          <Link href="/swarm" className="inline-flex items-center gap-2 px-4 py-2 bg-[#121211]/80 backdrop-blur-md border border-[#2C2C29] rounded-xl text-sm font-medium text-[#B1ADA1] hover:text-[#F4F3EE] transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Hub
+      {/* Top Universal Navigation Bar */}
+      <header className="sticky top-0 z-40 bg-[#121211]/90 backdrop-blur-md border-b border-[#2C2C29] px-4 py-3 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Link 
+            href="/swarm" 
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#1A1A18] hover:bg-[#2C2C29] border border-[#2C2C29] rounded-xl text-xs font-mono text-[#B1ADA1] hover:text-white transition-all"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>SWARM HUB</span>
           </Link>
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="text-xs font-bold text-[#F4F3EE] max-w-[200px] truncate">{task.title}</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#C15F3C]/20 text-[#C15F3C] border border-[#C15F3C]/30">
+              {formatMon(task.rewardWeiPerWorker)} MON / Node
+            </span>
+          </div>
         </div>
-        <div className="pointer-events-auto">
+
+        {/* Center: Dual UI Mode Switcher (Graph vs Manual) */}
+        <div className="flex items-center bg-[#0A0A0A] p-1 rounded-xl border border-[#242422] shadow-inner">
+          <button
+            onClick={() => setViewMode("GRAPH")}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all
+              ${viewMode === "GRAPH" ? "bg-[#C15F3C] text-white shadow-[0_0_12px_rgba(193,95,60,0.4)]" : "text-[#8A857B] hover:text-white"}
+            `}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>VISUAL GRAPH</span>
+          </button>
+          <button
+            onClick={() => setViewMode("MANUAL")}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all
+              ${viewMode === "MANUAL" ? "bg-[#10B981] text-[#0A0A0A] font-black shadow-[0_0_12px_rgba(16,185,129,0.4)]" : "text-[#8A857B] hover:text-white"}
+            `}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>MANUAL CONSOLE</span>
+          </button>
+        </div>
+
+        {/* Right: Connect Wallet */}
+        <div>
           <WalletConnectButton />
         </div>
-      </div>
+      </header>
 
-      {/* 3. Left Panel: Swarm Info */}
-      <div className="absolute top-20 left-4 w-[320px] bg-[#121211]/80 backdrop-blur-md border border-[#2C2C29] rounded-2xl p-5 z-10 flex flex-col gap-4 pointer-events-auto shadow-2xl">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-[#C15F3C]" />
-          <h1 className="text-[#F4F3EE] font-bold text-lg tracking-tight leading-tight">Swarm Engine</h1>
-        </div>
-        
-        <div className="space-y-1">
-          <span className="text-[10px] uppercase font-bold text-[#8A857B] tracking-wider">Task Target</span>
-          <p className="text-sm text-[#F4F3EE] font-medium">{task.title}</p>
-        </div>
+      {/* VIEW 1: INTERACTIVE SWARM GRAPH */}
+      {viewMode === "GRAPH" && (
+        <div className="w-full flex-1 relative overflow-hidden min-h-[calc(100vh-65px)]">
+          {/* Main Background Graph */}
+          <div className="absolute inset-0 z-0">
+            <SwarmGraph 
+              task={task} 
+              submissions={submissions} 
+              onNodeClick={(node) => setSelectedNode(node)} 
+            />
+          </div>
 
-        <div className="grid grid-cols-2 gap-2 pt-2">
-          <div className="p-3 bg-[#1A1A18] rounded-xl border border-[#3A3A36]">
-            <span className="text-[10px] uppercase font-bold text-[#8A857B]">Total Pool</span>
-            <div className="flex items-center gap-1.5 mt-1">
-              <Coins className="w-3.5 h-3.5 text-[#F59E0B]" />
-              <span className="text-sm font-mono font-bold text-[#F59E0B]">{formatMon((BigInt(task.rewardWeiPerWorker) * BigInt(task.maxWorkers)).toString())} MON</span>
+          {/* Left Panel: Swarm Quick Info */}
+          <div className="absolute top-6 left-4 w-[300px] bg-[#121211]/90 backdrop-blur-md border border-[#2C2C29] rounded-2xl p-5 z-10 flex flex-col gap-4 pointer-events-auto shadow-2xl">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-[#C15F3C]" />
+              <h1 className="text-[#F4F3EE] font-bold text-base tracking-tight leading-tight">Swarm Graph Engine</h1>
             </div>
-          </div>
-          <div className="p-3 bg-[#1A1A18] rounded-xl border border-[#3A3A36]">
-            <span className="text-[10px] uppercase font-bold text-[#8A857B]">Active Nodes</span>
-            <div className="flex items-center gap-1.5 mt-1">
-              <Users className="w-3.5 h-3.5 text-[#3B82F6]" />
-              <span className="text-sm font-mono font-bold text-[#3B82F6]">{slotsUsed}/{task.maxWorkers}</span>
+            
+            <div className="space-y-1">
+              <span className="text-[10px] uppercase font-bold text-[#8A857B] tracking-wider font-mono">Task Target</span>
+              <p className="text-xs text-[#F4F3EE] font-medium leading-relaxed">{task.title}</p>
             </div>
-          </div>
-        </div>
 
-        {/* Action Buttons for Requester/Worker */}
-        <div className="pt-2 flex flex-col gap-2">
-          {canJoin && (
-            <button 
-              onClick={handleJoin}
-              disabled={joinState === "joining" || !isConnected}
-              className="w-full py-3 rounded-xl font-bold text-sm tracking-wide bg-[#C15F3C] text-white hover:bg-[#D97757] disabled:opacity-50 transition-all flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(193,95,60,0.3)]"
-            >
-              {joinState === "joining" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              {isConnected ? "INJECT NODE (JOIN SWARM)" : "CONNECT WALLET"}
-            </button>
-          )}
-
-          {/* RELEASE PAYOUTS — visible whenever there are verified (or submitted)
-              workers who haven't been paid out yet, regardless of task status. */}
-          {isRequester && eligibleForPayout.length > 0 && paidOutCount < eligibleForPayout.length && (
-            <button
-              onClick={() => setShowPayoutOverlay(true)}
-              className="w-full py-2.5 rounded-xl font-bold text-xs tracking-wide bg-[#10B981] text-white hover:bg-[#34D399] transition-all flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-            >
-              <Coins className="w-4 h-4" />
-              RELEASE PAYOUTS ({eligibleForPayout.length})
-            </button>
-          )}
-          
-          {isRequester && task.status === "OPEN" && (
-            <button
-              onClick={handleGenerateReport}
-              disabled={triggeringReport || slotsUsed === 0}
-              className="w-full py-2.5 rounded-xl font-bold text-xs tracking-wide bg-[#3B82F6] text-white hover:bg-[#60A5FA] disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(59,130,246,0.2)]"
-            >
-              {triggeringReport ? "GENERATING..." : "FORCE VERIFICATION"}
-            </button>
-          )}
-
-          {isRequester && (task.status === "COMPLETED" || task.status === "CANCELLED") && eligibleForRefund.length > 0 && refundedCount < eligibleForRefund.length && (
-            <button
-              onClick={handleRefund}
-              disabled={!!refundingId}
-              className="w-full py-2.5 rounded-xl font-bold text-xs tracking-wide bg-[#8A857B] text-white hover:bg-[#B1ADA1] transition-all flex justify-center items-center gap-2"
-            >
-              {refundingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
-              REFUND ESCROW
-            </button>
-          )}
-
-        </div>
-
-      </div>
-
-      {/* 4. Right Panel: Inspector / Submission */}
-      {(hasJoined || selectedSubmission) && (
-        <div className="absolute top-20 right-4 w-[360px] max-h-[calc(100vh-120px)] overflow-y-auto bg-[#121211]/90 backdrop-blur-xl border border-[#3A3A36] rounded-2xl shadow-2xl z-20 pointer-events-auto">
-          <div className="sticky top-0 bg-[#121211]/95 px-5 py-4 border-b border-[#2C2C29] flex justify-between items-center">
-            <h2 className="text-[#F4F3EE] font-bold text-sm tracking-wide flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#C15F3C]" />
-              NODE INSPECTOR
-            </h2>
-            <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-[#2C2C29] rounded-md transition-colors text-[#8A857B]">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="p-5">
-            {/* If looking at own active submission */}
-            {hasJoined && mySubmission?.status === "EXECUTING" && (!selectedSubmission || selectedSubmission.id === mySubmission.id) && (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="p-3 bg-[#3B82F6]/10 border border-[#3B82F6]/30 rounded-xl mb-4">
-                  <span className="text-[#3B82F6] text-xs font-semibold flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] animate-pulse" />
-                    NODE ASSIGNED. AWAITING DATA.
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2.5 bg-[#1A1A18] rounded-xl border border-[#3A3A36]">
+                <span className="text-[10px] uppercase font-bold text-[#8A857B] font-mono">Total Pool</span>
+                <div className="flex items-center gap-1 mt-1">
+                  <Coins className="w-3.5 h-3.5 text-[#F59E0B]" />
+                  <span className="text-xs font-mono font-bold text-[#F59E0B]">
+                    {formatMon((BigInt(task.rewardWeiPerWorker) * BigInt(task.maxWorkers)).toString())} MON
                   </span>
                 </div>
-                
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-[#8A857B] uppercase tracking-wider">Execution Payload</label>
-                  <textarea
-                    value={resultText}
-                    onChange={e => setResultText(e.target.value)}
-                    required
-                    rows={4}
-                    className="w-full p-3 bg-[#0A0A0A] border border-[#2C2C29] rounded-xl text-sm text-[#F4F3EE] focus:border-[#C15F3C] outline-none font-mono"
-                    placeholder="Enter evidence or proof of work..."
-                  />
+              </div>
+              <div className="p-2.5 bg-[#1A1A18] rounded-xl border border-[#3A3A36]">
+                <span className="text-[10px] uppercase font-bold text-[#8A857B] font-mono">Active Nodes</span>
+                <div className="flex items-center gap-1 mt-1">
+                  <Users className="w-3.5 h-3.5 text-[#3B82F6]" />
+                  <span className="text-xs font-mono font-bold text-[#3B82F6]">{slotsUsed}/{task.maxWorkers}</span>
                 </div>
-                
-                <button
-                  type="submit"
-                  disabled={submitState === "submitting"}
-                  className="w-full py-3 rounded-xl font-bold text-sm tracking-wide bg-[#F4F3EE] text-[#0A0A0A] hover:bg-white disabled:opacity-50 transition-all flex justify-center items-center gap-2 mt-4"
+              </div>
+            </div>
+
+            {/* Actions for Worker & Requester */}
+            <div className="flex flex-col gap-2 pt-1">
+              {canJoin && (
+                <button 
+                  onClick={handleJoin}
+                  disabled={joinState === "joining" || !isConnected}
+                  className="w-full py-2.5 rounded-xl font-bold text-xs tracking-wide bg-[#C15F3C] text-white hover:bg-[#D97757] disabled:opacity-50 transition-all flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(193,95,60,0.3)]"
                 >
-                  {submitState === "submitting" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  TRANSMIT PACKET
+                  {joinState === "joining" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                  {isConnected ? "INJECT NODE (JOIN SWARM)" : "CONNECT WALLET"}
                 </button>
+              )}
+
+              {hasJoined && mySubmission?.status !== "PAID_OUT" && (
+                <button
+                  onClick={handleRejoin}
+                  disabled={rejoining}
+                  className="w-full py-2 rounded-xl font-mono font-bold text-xs bg-[#1A1A18] hover:bg-[#2C2C29] text-[#10B981] border border-[#10B981]/30 transition-all flex items-center justify-center gap-1.5"
+                >
+                  {rejoining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                  REJOIN / RE-SUBMIT PROOF
+                </button>
+              )}
+
+              {isRequester && eligibleForPayout.length > 0 && paidOutCount < eligibleForPayout.length && (
+                <button
+                  onClick={() => setShowPayoutOverlay(true)}
+                  className="w-full py-2.5 rounded-xl font-bold text-xs tracking-wide bg-[#10B981] text-[#0A0A0A] hover:bg-[#34D399] transition-all flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)] font-mono"
+                >
+                  <Coins className="w-4 h-4" />
+                  PAY ALL NODES ({eligibleForPayout.length})
+                </button>
+              )}
+
+              {isRequester && eligibleForRefund.length > 0 && (
+                <button
+                  onClick={handleRefund}
+                  disabled={!!refundingId}
+                  className="w-full py-2 rounded-xl font-bold text-xs bg-[#EF4444]/10 hover:bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444]/30 transition-all flex items-center justify-center gap-1.5"
+                >
+                  {refundingId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Clock className="w-3.5 h-3.5" />}
+                  REFUND UNCLAIMED ESCROW
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Right Panel: Node Inspector / Submission */}
+          {(hasJoined || selectedSubmission) && (
+            <div className="absolute top-6 right-4 w-[340px] max-h-[calc(100vh-140px)] overflow-y-auto bg-[#121211]/95 backdrop-blur-xl border border-[#3A3A36] rounded-2xl shadow-2xl z-20 pointer-events-auto">
+              <div className="sticky top-0 bg-[#121211]/95 px-4 py-3 border-b border-[#2C2C29] flex justify-between items-center">
+                <h2 className="text-[#F4F3EE] font-bold text-xs tracking-wide flex items-center gap-2 font-mono">
+                  <Sparkles className="w-3.5 h-3.5 text-[#C15F3C]" />
+                  NODE INSPECTOR
+                </h2>
+                <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-[#2C2C29] rounded-md transition-colors text-[#8A857B]">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* Form if own slot is in executing status */}
+                {hasJoined && mySubmission?.status === "EXECUTING" && (!selectedSubmission || selectedSubmission.id === mySubmission.id) && (
+                  <form onSubmit={handleSubmit} className="space-y-3">
+                    <div className="p-2.5 bg-[#3B82F6]/10 border border-[#3B82F6]/30 rounded-xl">
+                      <span className="text-[#3B82F6] text-xs font-mono font-semibold flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] animate-pulse" />
+                        NODE ASSIGNED. SUBMIT PROOF.
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-[#8A857B] uppercase tracking-wider font-mono">Execution Proof / Findings</label>
+                      <textarea
+                        value={resultText}
+                        onChange={e => setResultText(e.target.value)}
+                        required
+                        rows={4}
+                        className="w-full p-2.5 bg-[#0A0A0A] border border-[#2C2C29] rounded-xl text-xs text-[#F4F3EE] focus:border-[#C15F3C] outline-none font-mono"
+                        placeholder="Enter verified output or evidence..."
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-[#8A857B] uppercase tracking-wider font-mono">Severity / Category</label>
+                      <select
+                        value={resultSeverity}
+                        onChange={(e) => setResultSeverity(e.target.value as any)}
+                        className="w-full p-2 bg-[#0A0A0A] border border-[#2C2C29] rounded-xl text-xs text-[#F4F3EE] font-mono outline-none"
+                      >
+                        <option value="Low">Low Severity / Verified</option>
+                        <option value="Medium">Medium Severity</option>
+                        <option value="High">High Severity / Critical</option>
+                      </select>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={submitState === "submitting"}
+                      className="w-full py-2.5 rounded-xl font-bold text-xs tracking-wide bg-[#10B981] text-[#0A0A0A] hover:bg-[#34D399] disabled:opacity-50 transition-all flex justify-center items-center gap-2 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                    >
+                      {submitState === "submitting" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      SUBMIT EXECUTION PROOF
+                    </button>
+                  </form>
+                )}
+
+                {/* Inspecting node submission */}
+                {selectedSubmission && selectedSubmission.status !== "EXECUTING" && (
+                  <div className="space-y-3 font-mono text-xs">
+                    <div>
+                      <span className="text-[10px] text-[#8A857B] uppercase block">Worker</span>
+                      <span className="text-[#F4F3EE] bg-[#1A1A18] px-2 py-1 rounded block border border-[#2C2C29] mt-0.5">
+                        {formatAddress(selectedSubmission.workerAddress)}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-[#8A857B] uppercase block">Submitted Payload</span>
+                      <div className="text-[#B1ADA1] bg-[#0A0A0A] p-2.5 rounded-xl border border-[#2C2C29] mt-0.5 break-words">
+                        {selectedSubmission.resultText || "No text provided"}
+                      </div>
+                    </div>
+
+                    {isRequester && (selectedSubmission.status === "SUBMITTED" || selectedSubmission.status === "VERIFIED") && (
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#2C2C29]">
+                        <button
+                          onClick={() => handleOverride(selectedSubmission.id, "REJECT")}
+                          disabled={!!overridingId}
+                          className="py-2 bg-[#EF4444]/10 hover:bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444]/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1"
+                        >
+                          {overridingId === selectedSubmission.id + "REJECT" ? <Loader2 className="w-3 h-3 animate-spin" /> : "REJECT"}
+                        </button>
+                        <button
+                          onClick={() => handleOverride(selectedSubmission.id, "APPROVE")}
+                          disabled={!!overridingId}
+                          className="py-2 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-black text-xs rounded-xl flex items-center justify-center gap-1 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                        >
+                          {overridingId === selectedSubmission.id + "APPROVE" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Coins className="w-3 h-3" />}
+                          PAY & TRANSFER
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Floating Action Center (for Requester Reviews) */}
+          {showActionCenter && isRequester && reviewQueue.length > 0 && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-30 pointer-events-auto">
+              <div className="bg-[#161615]/95 backdrop-blur-xl border-2 border-[#10B981]/40 rounded-2xl p-4 shadow-2xl flex flex-col gap-3">
+                <div className="flex items-center justify-between border-b border-[#2C2C29] pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
+                    <span className="font-mono font-bold text-xs text-[#F4F3EE]">
+                      WORKER REVIEWS PENDING ({reviewQueue.length})
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleReleasePayout(true)}
+                    className="px-3 py-1 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-mono font-black text-xs rounded-lg flex items-center gap-1 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                  >
+                    <Coins className="w-3 h-3" />
+                    PAY ALL
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                  {reviewQueue.map(sub => (
+                    <div key={sub.id} className="flex items-center justify-between bg-[#10100F] p-3 rounded-xl border border-[#242422] gap-3">
+                      <div className="flex-1 min-w-0 font-mono text-xs">
+                        <span className="text-[#8A857B] text-[10px] block">Worker: {formatAddress(sub.workerAddress)}</span>
+                        <p className="text-[#F4F3EE] truncate text-xs mt-0.5">{sub.resultText || "Payload submitted"}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleOverride(sub.id, "REJECT")}
+                          disabled={!!overridingId}
+                          className="px-3 py-1.5 bg-[#EF4444]/10 hover:bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444]/30 rounded-lg text-xs font-mono font-bold"
+                        >
+                          REJECT
+                        </button>
+                        <button
+                          onClick={() => handleOverride(sub.id, "APPROVE")}
+                          disabled={!!overridingId}
+                          className="px-3.5 py-1.5 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] rounded-lg text-xs font-mono font-black flex items-center gap-1 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                        >
+                          {overridingId === sub.id + "APPROVE" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Coins className="w-3 h-3" />}
+                          PAY & TRANSFER ({formatMon(task.rewardWeiPerWorker)} MON)
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* VIEW 2: MANUAL CONSOLE & USABILITY VIEW */}
+      {viewMode === "MANUAL" && (
+        <div className="max-w-6xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-6 flex-1">
+          
+          {/* Top Swarm Overview Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 bg-[#121211] border border-[#2C2C29] rounded-2xl flex flex-col justify-between shadow-lg">
+              <span className="text-[10px] uppercase font-mono font-bold text-[#8A857B]">Escrow Reward / Worker</span>
+              <div className="flex items-center gap-2 mt-2">
+                <Coins className="w-5 h-5 text-[#10B981]" />
+                <span className="text-xl font-mono font-bold text-[#10B981]">{formatMon(task.rewardWeiPerWorker)} MON</span>
+              </div>
+              <span className="text-[10px] text-[#8A857B] font-mono mt-2">Instant on-chain transfer to worker</span>
+            </div>
+
+            <div className="p-4 bg-[#121211] border border-[#2C2C29] rounded-2xl flex flex-col justify-between shadow-lg">
+              <span className="text-[10px] uppercase font-mono font-bold text-[#8A857B]">Worker Nodes</span>
+              <div className="flex items-center gap-2 mt-2">
+                <Users className="w-5 h-5 text-[#3B82F6]" />
+                <span className="text-xl font-mono font-bold text-[#3B82F6]">{slotsUsed} / {task.maxWorkers} Filled</span>
+              </div>
+              <span className="text-[10px] text-[#8A857B] font-mono mt-2">{slotsAvailable} slots remaining</span>
+            </div>
+
+            <div className="p-4 bg-[#121211] border border-[#2C2C29] rounded-2xl flex flex-col justify-between shadow-lg">
+              <span className="text-[10px] uppercase font-mono font-bold text-[#8A857B]">Settlement Status</span>
+              <div className="flex items-center gap-2 mt-2">
+                <ShieldCheck className="w-5 h-5 text-[#836EF9]" />
+                <span className="text-base font-mono font-bold text-[#836EF9]">
+                  {paidOutCount} Paid · {reviewQueue.length} Pending
+                </span>
+              </div>
+              <span className="text-[10px] text-[#8A857B] font-mono mt-2">Monad Testnet (Chain ID 10143)</span>
+            </div>
+          </div>
+
+          {/* Worker Join / Rejoin Action Box */}
+          <div className="p-5 bg-[#121211] border border-[#2C2C29] rounded-2xl shadow-xl flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#2C2C29] pb-4">
+              <div>
+                <h2 className="text-base font-bold text-[#F4F3EE] flex items-center gap-2 font-mono">
+                  <Zap className="w-4 h-4 text-[#C15F3C]" />
+                  WORKER EXECUTION HUB
+                </h2>
+                <p className="text-xs text-[#8A857B] mt-0.5">
+                  Join as a parallel worker, execute the task, and receive {formatMon(task.rewardWeiPerWorker)} MON escrow directly.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {canJoin && (
+                  <button
+                    onClick={handleJoin}
+                    disabled={joinState === "joining" || !isConnected}
+                    className="px-4 py-2 bg-[#C15F3C] hover:bg-[#D97757] text-white font-mono font-bold text-xs rounded-xl transition-all shadow-[0_0_15px_rgba(193,95,60,0.3)] flex items-center gap-1.5"
+                  >
+                    {joinState === "joining" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                    JOIN AS WORKER
+                  </button>
+                )}
+
+                {hasJoined && (
+                  <button
+                    onClick={handleRejoin}
+                    disabled={rejoining}
+                    className="px-4 py-2 bg-[#1A1A18] hover:bg-[#2C2C29] text-[#10B981] border border-[#10B981]/30 font-mono font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"
+                  >
+                    {rejoining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    REJOIN / RE-SUBMIT PROOF
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* If Worker is currently Executing */}
+            {hasJoined && mySubmission?.status === "EXECUTING" && (
+              <form onSubmit={handleSubmit} className="p-4 bg-[#0A0A0A] border border-[#2C2C29] rounded-xl flex flex-col gap-3">
+                <span className="text-xs font-mono font-bold text-[#3B82F6] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#3B82F6] animate-pulse" />
+                  Your slot is ACTIVE. Enter your execution payload below:
+                </span>
+                <textarea
+                  value={resultText}
+                  onChange={(e) => setResultText(e.target.value)}
+                  required
+                  rows={3}
+                  className="w-full p-3 bg-[#121211] border border-[#2C2C29] rounded-xl text-xs text-[#F4F3EE] font-mono outline-none focus:border-[#10B981]"
+                  placeholder="Provide proof of execution, finding, or test result..."
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={submitState === "submitting"}
+                    className="px-5 py-2.5 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-mono font-black text-xs rounded-xl transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                  >
+                    {submitState === "submitting" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    SUBMIT PROOF & CLAIM REWARD
+                  </button>
+                </div>
               </form>
             )}
 
-            {/* If inspecting a specific submission (Requester view or past submission) */}
-            {selectedSubmission && selectedSubmission.status !== "EXECUTING" && (
-              <div className="space-y-5">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold text-[#8A857B] uppercase tracking-wider">Worker Address</span>
-                  <span className="text-sm font-mono text-[#F4F3EE] bg-[#1A1A18] px-2 py-1 rounded border border-[#2C2C29]">
-                    {formatAddress(selectedSubmission.workerAddress)}
+            {/* If Worker has already submitted */}
+            {hasJoined && mySubmission?.status !== "EXECUTING" && (
+              <div className="p-4 bg-[#0A0A0A] border border-[#2C2C29] rounded-xl flex items-center justify-between text-xs font-mono">
+                <div className="flex items-center gap-3">
+                  <span className={`px-2.5 py-1 rounded font-bold text-[11px]
+                    ${mySubmission?.status === "PAID_OUT" ? "bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/40" : "bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/40"}
+                  `}>
+                    STATUS: {mySubmission?.status}
                   </span>
+                  <span className="text-[#8A857B] truncate max-w-md">Proof: "{mySubmission?.resultText || "N/A"}"</span>
                 </div>
-
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold text-[#8A857B] uppercase tracking-wider">Payload</span>
-                  <div className="text-sm text-[#B1ADA1] bg-[#0A0A0A] p-3 rounded-xl border border-[#2C2C29] font-mono break-words">
-                    {selectedSubmission.resultText || "No text provided."}
-                  </div>
-                </div>
-
-                {isRequester && (selectedSubmission.status === "SUBMITTED" || selectedSubmission.status === "VERIFIED") && (
-                  <div className="grid grid-cols-2 gap-2 pt-4 border-t border-[#2C2C29]">
-                    <button
-                      onClick={() => handleOverride(selectedSubmission.id, "REJECT")}
-                      disabled={!!overridingId}
-                      className="py-2 bg-[#EF4444]/20 hover:bg-[#EF4444]/30 text-[#EF4444] font-bold text-xs rounded-lg transition-colors border border-[#EF4444]/30 flex justify-center items-center gap-2"
-                    >
-                      {overridingId === selectedSubmission.id + "REJECT" && <Loader2 className="w-3 h-3 animate-spin" />}
-                      REJECT
-                    </button>
-                    <button
-                      onClick={() => handleOverride(selectedSubmission.id, "APPROVE")}
-                      disabled={!!overridingId}
-                      className="py-2 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-black text-xs rounded-lg transition-colors border border-[#10B981] flex justify-center items-center gap-2"
-                    >
-                      {overridingId === selectedSubmission.id + "APPROVE" && <Loader2 className="w-3 h-3 animate-spin" />}
-                      {selectedSubmission.status === "VERIFIED" ? "PAY & APPROVE" : "APPROVE"}
-                    </button>
-                  </div>
+                {mySubmission?.status === "PAID_OUT" && (
+                  <span className="text-[#10B981] font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-4 h-4" /> PAID ON-CHAIN
+                  </span>
                 )}
               </div>
             )}
           </div>
-        </div>
-      )}
 
-      {/* 5. Bottom Footer (Monad Status) */}
-      <div className="absolute bottom-0 left-0 right-0 p-3 z-10 flex justify-between items-end pointer-events-none">
-        <div className="pointer-events-auto flex items-center gap-3 bg-[#121211]/80 backdrop-blur-md px-4 py-2 rounded-xl border border-[#2C2C29]">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#836EF9] animate-pulse" />
-            <span className="text-xs font-bold text-[#F4F3EE]">MONAD TESTNET</span>
-          </div>
-          <div className="w-px h-3 bg-[#3A3A36]" />
-          <span className="text-xs font-mono text-[#8A857B]">Tps: 10k+</span>
-        </div>
-      </div>
-
-      {/* 5b. Persistent Swarm Activity Bar — always visible at bottom-center so
-          workers AND requesters can see live swarm state and quick actions. */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
-        <div className="flex items-center gap-2 bg-[#121211]/90 backdrop-blur-xl border border-[#2C2C29] rounded-2xl px-3 py-2 shadow-2xl">
-          {/* Live swarm counters */}
-          <div className="flex items-center gap-1.5 px-2">
-            <Users className="w-3.5 h-3.5 text-[#3B82F6]" />
-            <span className="text-[11px] font-mono font-bold text-[#F4F3EE]">{slotsUsed}/{task.maxWorkers}</span>
-            <span className="text-[9px] font-bold text-[#8A857B] tracking-widest">JOINED</span>
-          </div>
-          <div className="w-px h-5 bg-[#2C2C29]" />
-          <div className="flex items-center gap-1.5 px-2">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#10B981]" />
-            <span className="text-[11px] font-mono font-bold text-[#10B981]">{verifiedCount}</span>
-            <span className="text-[9px] font-bold text-[#8A857B] tracking-widest">VERIFIED</span>
-          </div>
-          <div className="w-px h-5 bg-[#2C2C29]" />
-          <div className="flex items-center gap-1.5 px-2">
-            <Coins className="w-3.5 h-3.5 text-[#F59E0B]" />
-            <span className="text-[11px] font-mono font-bold text-[#F59E0B]">{paidOutCount}</span>
-            <span className="text-[9px] font-bold text-[#8A857B] tracking-widest">PAID</span>
-          </div>
-
-          {/* Status pill for requester */}
-          {isRequester && reviewQueue.length > 0 && (
-            <>
-              <div className="w-px h-5 bg-[#2C2C29]" />
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#10B981]/15 border border-[#10B981]/40 rounded-lg animate-pulse">
-                <Zap className="w-3.5 h-3.5 text-[#10B981]" />
-                <span className="text-[10px] font-black text-[#10B981] tracking-widest">
-                  {reviewQueue.length} TO REVIEW
-                </span>
-              </div>
-            </>
-          )}
-
-          {/* Worker self-status */}
-          {!isRequester && mySubmission && (
-            <>
-              <div className="w-px h-5 bg-[#2C2C29]" />
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#1A1A18] border border-[#2C2C29] rounded-lg">
-                <div
-                  className={
-                    "w-1.5 h-1.5 rounded-full " +
-                    (mySubmission.status === "EXECUTING"
-                      ? "bg-[#3B82F6] animate-pulse"
-                      : mySubmission.status === "SUBMITTED"
-                        ? "bg-[#F59E0B] animate-pulse"
-                        : mySubmission.status === "VERIFIED"
-                          ? "bg-[#10B981]"
-                          : mySubmission.status === "PAID_OUT"
-                            ? "bg-[#10B981]"
-                            : mySubmission.status === "REJECTED"
-                              ? "bg-[#EF4444]"
-                              : "bg-[#8A857B]")
-                  }
-                />
-                <span className="text-[10px] font-black text-[#F4F3EE] tracking-widest">
-                  YOU · {mySubmission.status}
-                </span>
-              </div>
-            </>
-          )}
-
-          {/* Requester quick-CTAs */}
-          {isRequester && reviewQueue.length > 0 && (
-            <>
-              <div className="w-px h-5 bg-[#2C2C29]" />
-              {reviewQueue.some((s) => s.status === "VERIFIED") && (
+          {/* Worker Submissions Management Table */}
+          <div className="p-5 bg-[#121211] border border-[#2C2C29] rounded-2xl shadow-xl flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-[#2C2C29] pb-3">
+              <h2 className="text-base font-bold text-[#F4F3EE] font-mono flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#3B82F6]" />
+                SWARM SUBMISSIONS & TRANSFERS ({submissions.length})
+              </h2>
+              {isRequester && eligibleForPayout.length > 0 && (
                 <button
-                  onClick={() => setShowPayoutOverlay(true)}
-                  className="px-3 py-1.5 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-black text-[10px] rounded-lg tracking-widest flex items-center gap-1.5 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                  onClick={() => handleReleasePayout(true)}
+                  className="px-4 py-1.5 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-mono font-black text-xs rounded-xl flex items-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
                 >
-                  <Coins className="w-3 h-3" />
-                  PAY ALL
+                  <Coins className="w-3.5 h-3.5" />
+                  PAY ALL ELIGIBLE ({eligibleForPayout.length})
                 </button>
               )}
-              <button
-                onClick={() => setShowActionCenter(true)}
-                className="px-3 py-1.5 bg-[#F4F3EE] hover:bg-white text-[#0A0A0A] font-black text-[10px] rounded-lg tracking-widest flex items-center gap-1.5"
-              >
-                <Zap className="w-3 h-3" />
-                REVIEW QUEUE
-              </button>
-            </>
-          )}
+            </div>
 
-          {/* Refund CTA for requester with rejected slots */}
-          {isRequester && eligibleForRefund.length > 0 && refundedCount < eligibleForRefund.length && (
-            <>
-              <div className="w-px h-5 bg-[#2C2C29]" />
-              <button
-                onClick={handleRefund}
-                disabled={!!refundingId}
-                className="px-3 py-1.5 bg-[#8A857B]/20 hover:bg-[#8A857B]/30 text-[#B1ADA1] border border-[#8A857B]/30 font-bold text-[10px] rounded-lg tracking-widest flex items-center gap-1.5"
-              >
-                {refundingId ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock className="w-3 h-3" />}
-                REFUND
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* 6. Action Center for Requester (Bottom Floating) */}
-      {isRequester && reviewQueue.length > 0 && showActionCenter && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-40 w-full max-w-3xl pointer-events-auto">
-          <div className="bg-[#0A0A0A]/95 backdrop-blur-xl border-2 border-[#10B981]/50 rounded-2xl p-5 shadow-[0_0_50px_rgba(16,185,129,0.15)]">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-black text-[#10B981] tracking-widest flex items-center gap-2">
-                <Zap className="w-5 h-5 animate-pulse" />
-                ACTION REQUIRED: {reviewQueue.length} WORKER(S) AWAITING REVIEW
-              </h3>
-              <div className="flex items-center gap-2">
-                {reviewQueue.some((s) => s.status === "VERIFIED") && (
-                  <button
-                    onClick={() => setShowPayoutOverlay(true)}
-                    className="px-3 py-1.5 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-black text-[10px] rounded-lg tracking-widest flex items-center gap-1.5 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
-                  >
-                    <Coins className="w-3 h-3" />
-                    PAY ALL VERIFIED
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowActionCenter(false)}
-                  className="p-1.5 hover:bg-[#2C2C29] rounded-md transition-colors text-[#8A857B]"
-                  aria-label="Close review queue"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+            {submissions.length === 0 ? (
+              <div className="py-12 flex flex-col items-center justify-center text-[#8A857B] text-xs font-mono">
+                No workers have joined this swarm yet.
               </div>
-            </div>
-            <div className="flex flex-col gap-3 max-h-[35vh] overflow-y-auto custom-scrollbar pr-2">
-              {reviewQueue.map(sub => {
-                const isVerified = sub.status === "VERIFIED";
-                return (
-                  <div key={sub.id} className="flex items-center justify-between bg-[#121211] p-4 rounded-xl border border-[#2C2C29]">
-                    <div className="flex-1 pr-4">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <p className="text-xs font-mono text-[#8A857B]">Worker: {formatAddress(sub.workerAddress)}</p>
-                        <span
-                          className={
-                            "text-[9px] font-black tracking-widest px-1.5 py-0.5 rounded " +
-                            (isVerified
-                              ? "bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30"
-                              : "bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/30")
-                          }
-                        >
-                          {isVerified ? "VERIFIED · PAY TO RELEASE" : "AWAITING DECISION"}
-                        </span>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {submissions.map((sub, idx) => {
+                  const isPaid = sub.status === "PAID_OUT";
+                  const isPending = sub.status === "SUBMITTED" || sub.status === "VERIFIED";
+
+                  return (
+                    <div 
+                      key={sub.id} 
+                      className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all
+                        ${isPaid ? "bg-[#10B981]/5 border-[#10B981]/30" : "bg-[#0A0A0A] border-[#242422]"}
+                      `}
+                    >
+                      <div className="flex flex-col gap-1.5 font-mono text-xs flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#8A857B] font-bold">SLOT #{idx + 1}</span>
+                          <span className="text-[#F4F3EE] bg-[#1A1A18] px-2 py-0.5 rounded border border-[#2C2C29]">
+                            {formatAddress(sub.workerAddress)}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold
+                            ${isPaid ? "bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/40" : isPending ? "bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/40" : "bg-[#2C2C29] text-[#8A857B]"}
+                          `}>
+                            {sub.status}
+                          </span>
+                        </div>
+                        <p className="text-[#B1ADA1] text-xs mt-1 bg-[#121211] p-2.5 rounded-lg border border-[#242422] break-words">
+                          {sub.resultText || "No proof text submitted yet."}
+                        </p>
                       </div>
-                      <p className="text-sm text-[#F4F3EE] line-clamp-2">{sub.resultText || "No text provided"}</p>
-                    </div>
-                    <div className="flex items-center gap-3 border-l border-[#2C2C29] pl-4">
-                      <button
-                        onClick={() => handleOverride(sub.id, "REJECT")}
-                        disabled={!!overridingId}
-                        className="px-4 py-2.5 bg-[#EF4444]/10 hover:bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444]/30 font-bold text-xs rounded-xl transition-all flex items-center gap-2"
-                      >
-                        {overridingId === sub.id + "REJECT" && <Loader2 className="w-4 h-4 animate-spin" />}
-                        REJECT
-                      </button>
-                      <button
-                        onClick={() => handleOverride(sub.id, "APPROVE")}
-                        disabled={!!overridingId}
-                        className="px-5 py-2.5 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-black text-xs rounded-xl transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.4)]"
-                      >
-                        {overridingId === sub.id + "APPROVE" ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Coins className="w-4 h-4" />
+
+                      {/* Requester Transfer & Review Controls */}
+                      <div className="flex items-center gap-2">
+                        {isRequester && isPending && (
+                          <>
+                            <button
+                              onClick={() => handleOverride(sub.id, "REJECT")}
+                              disabled={!!overridingId}
+                              className="px-3 py-2 bg-[#EF4444]/10 hover:bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444]/30 rounded-xl text-xs font-mono font-bold"
+                            >
+                              REJECT
+                            </button>
+                            <button
+                              onClick={() => handleOverride(sub.id, "APPROVE")}
+                              disabled={!!overridingId}
+                              className="px-4 py-2 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-mono font-black text-xs rounded-xl flex items-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.4)]"
+                            >
+                              {overridingId === sub.id + "APPROVE" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Coins className="w-3.5 h-3.5" />}
+                              PAY & TRANSFER ({formatMon(task.rewardWeiPerWorker)} MON)
+                            </button>
+                          </>
                         )}
-                        {isVerified ? "PAY & APPROVE" : "APPROVE"}
-                      </button>
+
+                        {isPaid && (
+                          <div className="flex items-center gap-1 text-[#10B981] font-mono font-bold text-xs bg-[#10B981]/10 px-3 py-1.5 rounded-xl border border-[#10B981]/30">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>TRANSFERRED ON-CHAIN</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
+
         </div>
       )}
 
-      {/* Signature Moment: Swarm Complete Overlay */}
-      {showSwarmComplete && (
-        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-[#0A0A0A]/40 backdrop-blur-[2px]">
-          <div className="animate-in zoom-in-95 duration-700 bg-gradient-to-b from-[#10B981]/20 to-transparent p-12 rounded-full flex flex-col items-center">
-            <div className="w-24 h-24 rounded-full bg-[#10B981] flex items-center justify-center mb-6 shadow-[0_0_100px_rgba(16,185,129,0.8)] animate-pulse">
-              <CheckCircle2 className="w-12 h-12 text-[#0A0A0A]" />
-            </div>
-            <h2 className="text-4xl font-black text-white tracking-widest drop-shadow-[0_0_20px_rgba(16,185,129,0.8)]">SWARM EXECUTED</h2>
-            <p className="text-[#10B981] mt-2 font-mono uppercase font-bold tracking-widest text-sm">Settlement Finalized on Monad</p>
-          </div>
-        </div>
-      )}
-      
       {/* Payout Confirmation Modal */}
       {showPayoutOverlay && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto">
           <div className="bg-[#121211] border border-[#2C2C29] p-6 rounded-2xl max-w-sm w-full shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-2">Release Escrow?</h3>
+            <h3 className="text-base font-bold text-white mb-2 font-mono">Release Escrow Payouts?</h3>
             {payoutStatusText ? (
               <div className="flex flex-col items-center justify-center py-6 gap-3">
                 <Loader2 className="w-8 h-8 text-[#10B981] animate-spin" />
-                <p className="text-sm text-[#F4F3EE] font-mono">{payoutStatusText}</p>
+                <p className="text-xs text-[#F4F3EE] font-mono text-center">{payoutStatusText}</p>
               </div>
             ) : (
               <>
-                <p className="text-sm text-[#B1ADA1] mb-6">
-                  You are about to release {formatMon((eligibleForPayout.length * parseFloat(task.rewardWeiPerWorker)).toString())} MON to {eligibleForPayout.length} verified nodes.
+                <p className="text-xs text-[#B1ADA1] mb-6 font-mono leading-relaxed">
+                  You are about to transfer {formatMon((eligibleForPayout.length * parseFloat(task.rewardWeiPerWorker)).toString())} MON directly to {eligibleForPayout.length} worker nodes on Monad Testnet.
                 </p>
                 <div className="flex gap-3">
-                  <button onClick={() => setShowPayoutOverlay(false)} className="flex-1 py-2.5 rounded-xl border border-[#3A3A36] text-[#F4F3EE] font-bold text-xs hover:bg-[#1A1A18]">CANCEL</button>
-                  <button onClick={() => handleReleasePayout(true)} disabled={!!payingOutId} className="flex-1 py-2.5 rounded-xl bg-[#10B981] text-white font-bold text-xs hover:bg-[#34D399] flex justify-center items-center gap-2">
+                  <button onClick={() => setShowPayoutOverlay(false)} className="flex-1 py-2 rounded-xl border border-[#3A3A36] text-[#F4F3EE] font-bold text-xs font-mono hover:bg-[#1A1A18]">
+                    CANCEL
+                  </button>
+                  <button 
+                    onClick={() => handleReleasePayout(true)} 
+                    disabled={!!payingOutId} 
+                    className="flex-1 py-2 rounded-xl bg-[#10B981] text-[#0A0A0A] font-black text-xs font-mono hover:bg-[#34D399] flex justify-center items-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.4)]"
+                  >
                     <Coins className="w-4 h-4" />
                     CONFIRM
                   </button>
