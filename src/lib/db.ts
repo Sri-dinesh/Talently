@@ -41,47 +41,24 @@ globalForMemory.memorySwarmTasks = memorySwarmTasks;
 globalForMemory.memorySwarmSubmissions = memorySwarmSubmissions;
 globalForMemory.memoryFloorGames = memoryFloorGames;
 
-let hasLoadedFromDisk = false;
+let lastTasksMtime = 0;
+let lastUsersMtime = 0;
+let lastSwarmTasksMtime = 0;
+let lastSwarmSubsMtime = 0;
+let lastGamesMtime = 0;
 
-// Hydrate from persistent disk store on startup
+// Hydrate from persistent disk store on startup and sync on file change
 function loadFromDisk(force = false): void {
-  if (hasLoadedFromDisk && !force) return;
-  hasLoadedFromDisk = true;
-
-  try {
-    if (fs.existsSync(TASKS_FILE)) {
-      const raw = fs.readFileSync(TASKS_FILE, "utf-8");
-      const tasks: Task[] = JSON.parse(raw);
-      memoryTasks.clear();
-      for (const t of tasks) {
-        memoryTasks.set(t.id, t);
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    if (fs.existsSync(USERS_FILE)) {
-      const raw = fs.readFileSync(USERS_FILE, "utf-8");
-      const users: User[] = JSON.parse(raw);
-      memoryUsers.clear();
-      for (const u of users) {
-        const addr = u.address.toLowerCase();
-        memoryUsers.set(addr, u);
-      }
-    }
-  } catch {
-    // ignore
-  }
-
   try {
     if (fs.existsSync(SWARM_TASKS_FILE)) {
-      const raw = fs.readFileSync(SWARM_TASKS_FILE, "utf-8");
-      const swarmTasks: SwarmTask[] = JSON.parse(raw);
-      memorySwarmTasks.clear();
-      for (const st of swarmTasks) {
-        memorySwarmTasks.set(st.id, st);
+      const stats = fs.statSync(SWARM_TASKS_FILE);
+      if (force || stats.mtimeMs > lastSwarmTasksMtime) {
+        lastSwarmTasksMtime = stats.mtimeMs;
+        const raw = fs.readFileSync(SWARM_TASKS_FILE, "utf-8");
+        const swarmTasks: SwarmTask[] = JSON.parse(raw);
+        for (const st of swarmTasks) {
+          memorySwarmTasks.set(st.id, st);
+        }
       }
     }
   } catch {
@@ -90,11 +67,46 @@ function loadFromDisk(force = false): void {
 
   try {
     if (fs.existsSync(SWARM_SUBMISSIONS_FILE)) {
-      const raw = fs.readFileSync(SWARM_SUBMISSIONS_FILE, "utf-8");
-      const subs: SwarmSubmission[] = JSON.parse(raw);
-      memorySwarmSubmissions.clear();
-      for (const s of subs) {
-        memorySwarmSubmissions.set(s.id, s);
+      const stats = fs.statSync(SWARM_SUBMISSIONS_FILE);
+      if (force || stats.mtimeMs > lastSwarmSubsMtime) {
+        lastSwarmSubsMtime = stats.mtimeMs;
+        const raw = fs.readFileSync(SWARM_SUBMISSIONS_FILE, "utf-8");
+        const subs: SwarmSubmission[] = JSON.parse(raw);
+        for (const s of subs) {
+          memorySwarmSubmissions.set(s.id, s);
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    if (fs.existsSync(TASKS_FILE)) {
+      const stats = fs.statSync(TASKS_FILE);
+      if (force || stats.mtimeMs > lastTasksMtime) {
+        lastTasksMtime = stats.mtimeMs;
+        const raw = fs.readFileSync(TASKS_FILE, "utf-8");
+        const tasks: Task[] = JSON.parse(raw);
+        for (const t of tasks) {
+          memoryTasks.set(t.id, t);
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    if (fs.existsSync(USERS_FILE)) {
+      const stats = fs.statSync(USERS_FILE);
+      if (force || stats.mtimeMs > lastUsersMtime) {
+        lastUsersMtime = stats.mtimeMs;
+        const raw = fs.readFileSync(USERS_FILE, "utf-8");
+        const users: User[] = JSON.parse(raw);
+        for (const u of users) {
+          memoryUsers.set(u.address.toLowerCase(), u);
+        }
       }
     }
   } catch {
@@ -103,11 +115,14 @@ function loadFromDisk(force = false): void {
 
   try {
     if (fs.existsSync(FLOOR_GAMES_FILE)) {
-      const raw = fs.readFileSync(FLOOR_GAMES_FILE, "utf-8");
-      const games: FloorGame[] = JSON.parse(raw);
-      memoryFloorGames.clear();
-      for (const g of games) {
-        memoryFloorGames.set(g.id, g);
+      const stats = fs.statSync(FLOOR_GAMES_FILE);
+      if (force || stats.mtimeMs > lastGamesMtime) {
+        lastGamesMtime = stats.mtimeMs;
+        const raw = fs.readFileSync(FLOOR_GAMES_FILE, "utf-8");
+        const games: FloorGame[] = JSON.parse(raw);
+        for (const g of games) {
+          memoryFloorGames.set(g.id, g);
+        }
       }
     }
   } catch {
@@ -233,23 +248,8 @@ function loadFromDisk(force = false): void {
   }
 }
 
-let saveTimer: NodeJS.Timeout | null = null;
-
-// Persist memory store to disk (non-blocking debounce)
-function saveToDisk(immediate = false): void {
-  if (immediate) {
-    doSave();
-    return;
-  }
-  if (!saveTimer) {
-    saveTimer = setTimeout(() => {
-      saveTimer = null;
-      doSave();
-    }, 40);
-  }
-}
-
-function doSave(): void {
+// Persist memory store to disk
+function saveToDisk(): void {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -259,26 +259,35 @@ function doSave(): void {
       JSON.stringify(Array.from(memoryTasks.values()), null, 2),
       "utf-8"
     );
+    lastTasksMtime = Date.now();
+
     fs.writeFileSync(
       USERS_FILE,
       JSON.stringify(Array.from(memoryUsers.values()), null, 2),
       "utf-8"
     );
+    lastUsersMtime = Date.now();
+
     fs.writeFileSync(
       SWARM_TASKS_FILE,
       JSON.stringify(Array.from(memorySwarmTasks.values()), null, 2),
       "utf-8"
     );
+    lastSwarmTasksMtime = Date.now();
+
     fs.writeFileSync(
       SWARM_SUBMISSIONS_FILE,
       JSON.stringify(Array.from(memorySwarmSubmissions.values()), null, 2),
       "utf-8"
     );
+    lastSwarmSubsMtime = Date.now();
+
     fs.writeFileSync(
       FLOOR_GAMES_FILE,
       JSON.stringify(Array.from(memoryFloorGames.values()), null, 2),
       "utf-8"
     );
+    lastGamesMtime = Date.now();
   } catch {
     // ignore
   }

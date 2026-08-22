@@ -3,7 +3,7 @@
 import React, { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAccount, useWalletClient, usePublicClient } from "wagmi";
+import { useAccount, useSendTransaction, usePublicClient } from "wagmi";
 import { 
   ArrowLeft, Users, Clock, Loader2, Send, ShieldCheck, 
   Coins, Sparkles, CheckCircle2, AlertTriangle, X, Zap,
@@ -28,7 +28,7 @@ function formatMon(wei: string): string {
 export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: string }> }) {
   const { swarmId } = use(params);
   const { address, isConnected } = useAccount();
-  const { data: walletClient } = useWalletClient();
+  const { sendTransactionAsync } = useSendTransaction();
   const publicClient = usePublicClient();
   const router = useRouter();
 
@@ -173,22 +173,39 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
       const target = submissions.find((s) => s.id === submissionId);
 
       if (action === "APPROVE") {
-        let hash: `0x${string}` | "" = "";
-        if (walletClient && publicClient && target?.workerAddress) {
-          try {
-            hash = await walletClient.sendTransaction({
-              to: target.workerAddress as `0x${string}`,
-              value: BigInt(task.rewardWeiPerWorker),
-            });
-            await publicClient.waitForTransactionReceipt({ hash });
-          } catch (txErr: any) {
-            console.error("On-chain payout transfer failed:", txErr);
-            alert(`Transfer failed: ${txErr?.shortMessage || txErr?.message || "Please check wallet balance on Monad"}`);
-            return;
-          }
+        if (!isConnected) {
+          alert("Please connect your wallet to approve and transfer funds.");
+          return;
         }
 
-        // Direct record payout
+        if (!target?.workerAddress) {
+          alert("Target worker address is invalid.");
+          return;
+        }
+
+        let hash: `0x${string}` | "" = "";
+        try {
+          // Explicitly prompt MetaMask confirm dialog box on Monad Testnet!
+          hash = await sendTransactionAsync({
+            to: target.workerAddress as `0x${string}`,
+            value: BigInt(task.rewardWeiPerWorker),
+          });
+
+          if (publicClient && hash) {
+            await publicClient.waitForTransactionReceipt({ hash });
+          }
+        } catch (txErr: any) {
+          console.error("MetaMask transfer rejected or failed:", txErr);
+          alert(`Transfer cancelled or failed: ${txErr?.shortMessage || txErr?.message || "User rejected confirmation in MetaMask"}`);
+          return;
+        }
+
+        if (!hash) {
+          alert("Transaction was not confirmed in MetaMask.");
+          return;
+        }
+
+        // Direct record payout with real on-chain transaction hash
         await fetch("/api/swarm/" + task.id + "/payout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -203,9 +220,9 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
         });
       }
       await fetchTask();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Action failed. Check network connection.");
+      alert(`Action failed: ${err?.message || "Check network connection"}`);
     } finally {
       setOverridingId(null);
     }
@@ -213,27 +230,37 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
 
   async function handleReleasePayout(payoutAll = true) {
     if (!task || !userAddress) return;
+    if (!isConnected) {
+      alert("Please connect your wallet to release payouts.");
+      return;
+    }
     setPayingOutId(payoutAll ? "all" : "single");
-    setPayoutStatusText("Signing transfer on Monad...");
+    setPayoutStatusText("Waiting for MetaMask confirmation...");
     
     try {
       const targets = eligibleForPayout;
       const txHashes: Record<string, string> = {};
 
-      if (walletClient && publicClient) {
-        for (const target of targets) {
-          try {
-            const hash = await walletClient.sendTransaction({
-              to: target.workerAddress as `0x${string}`,
-              value: BigInt(task.rewardWeiPerWorker),
-            });
-            setPayoutStatusText(`Confirming tx ${hash.slice(0, 10)}...`);
+      for (const target of targets) {
+        try {
+          setPayoutStatusText(`Confirming transfer of ${formatMon(task.rewardWeiPerWorker)} MON to ${formatAddress(target.workerAddress)} in MetaMask...`);
+          const hash = await sendTransactionAsync({
+            to: target.workerAddress as `0x${string}`,
+            value: BigInt(task.rewardWeiPerWorker),
+          });
+          if (publicClient && hash) {
+            setPayoutStatusText(`Waiting for Monad block confirmation (${hash.slice(0, 10)}...)...`);
             await publicClient.waitForTransactionReceipt({ hash });
-            txHashes[target.id] = hash;
-          } catch (err) {
-            console.error(err);
           }
+          txHashes[target.id] = hash;
+        } catch (err: any) {
+          console.error("Batch transfer error for slot:", target.id, err);
         }
+      }
+
+      if (Object.keys(txHashes).length === 0) {
+        alert("No transfers were confirmed in MetaMask.");
+        return;
       }
 
       await fetch("/api/swarm/" + task.id + "/payout", {
@@ -246,9 +273,12 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
         }),
       });
 
-      setPayoutSuccessMsg("Payouts released successfully on Monad");
+      setPayoutSuccessMsg("Payouts confirmed & released on Monad Testnet!");
       await fetchTask();
       setTimeout(() => setPayoutSuccessMsg(null), 3000);
+    } catch (err: any) {
+      console.error("Release payout error:", err);
+      alert(`Failed to complete payout: ${err?.message || "Transaction cancelled"}`);
     } finally {
       setPayingOutId(null);
       setPayoutStatusText(null);
