@@ -158,23 +158,21 @@ export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: 
         const alreadyVerified = target?.status?.toUpperCase() === "VERIFIED";
 
         let hash: `0x${string}` | "" = "";
-        if (walletClient && publicClient && target) {
-          hash = await walletClient.sendTransaction({
-            to: target.workerAddress as `0x${string}`,
-            value: BigInt(task.rewardWeiPerWorker),
-          });
-          await publicClient.waitForTransactionReceipt({ hash });
+        if (walletClient && publicClient && target?.workerAddress) {
+          try {
+            hash = await walletClient.sendTransaction({
+              to: target.workerAddress as `0x${string}`,
+              value: BigInt(task.rewardWeiPerWorker),
+            });
+            await publicClient.waitForTransactionReceipt({ hash });
+          } catch (txErr: any) {
+            console.error("On-chain payout transfer failed:", txErr);
+            alert(`Transfer failed: ${txErr?.shortMessage || txErr?.message || "Please check wallet balance on Monad"}`);
+            return;
+          }
         }
 
-        if (!alreadyVerified) {
-          // Flip SUBMITTED → VERIFIED so the payout endpoint will accept it.
-          await fetch("/api/swarm/" + task.id + "/override", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ submissionId, action: "APPROVE", requesterAddress: userAddress }),
-          });
-        }
-
+        // Direct record payout
         await fetch("/api/swarm/" + task.id + "/payout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -453,7 +453,7 @@ export function executePlayerAction(game: FloorGame, action: FloorAction): { suc
 
     const text = `${player.displayName} announced: "${action.targetTileId} is ${action.claimedType}." ${action.messageText ? `("${action.messageText}")` : ""}`;
     game.messages.push({
-      id: `msg_${Date.now()}_claim`,
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_claim`,
       senderId: player.id,
       senderName: player.displayName,
       senderColor: player.avatarColor,
@@ -475,7 +475,7 @@ export function executePlayerAction(game: FloorGame, action: FloorAction): { suc
 
     const target = game.players.find(p => p.id === action.targetPlayerId);
     game.messages.push({
-      id: `msg_${Date.now()}_whisper`,
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_whisper`,
       senderId: player.id,
       senderName: player.displayName,
       senderColor: player.avatarColor,
@@ -497,7 +497,7 @@ export function executePlayerAction(game: FloorGame, action: FloorAction): { suc
 
     const target = action.targetPlayerId ? game.players.find(p => p.id === action.targetPlayerId) : undefined;
     const query = {
-      id: `query_${Date.now()}_${Math.random()}`,
+      id: `query_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       requesterId: player.id,
       requesterName: player.displayName,
       targetPlayerId: action.targetPlayerId,
@@ -510,7 +510,7 @@ export function executePlayerAction(game: FloorGame, action: FloorAction): { suc
 
     game.humanQueries.unshift(query);
     game.messages.push({
-      id: `msg_${Date.now()}_query`,
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_query`,
       senderId: player.id,
       senderName: player.displayName,
       senderColor: player.avatarColor,
@@ -538,7 +538,7 @@ export function executePlayerAction(game: FloorGame, action: FloorAction): { suc
 
     player.score += 25; // Reward for answering query
     game.messages.push({
-      id: `msg_${Date.now()}_ans`,
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_ans`,
       senderId: player.id,
       senderName: player.displayName,
       senderColor: player.avatarColor,
@@ -561,7 +561,7 @@ export function executePlayerAction(game: FloorGame, action: FloorAction): { suc
 
     player.ghostMessageUsed = true;
     game.messages.push({
-      id: `msg_${Date.now()}_ghost`,
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_ghost`,
       senderId: "GHOST_REALM",
       senderName: "👻 Anonymous Ghost",
       senderColor: "#94A3B8",

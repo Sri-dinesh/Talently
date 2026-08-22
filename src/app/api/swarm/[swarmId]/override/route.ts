@@ -36,7 +36,7 @@ export async function POST(
     }
 
     // Only requester can override
-    if (swarmTask.requesterAddress !== requesterAddress.toLowerCase()) {
+    if (swarmTask.requesterAddress.toLowerCase() !== requesterAddress.toLowerCase()) {
       return NextResponse.json({ error: { code: "FORBIDDEN", message: "Only the requester can override submissions" } }, { status: 403 });
     }
 

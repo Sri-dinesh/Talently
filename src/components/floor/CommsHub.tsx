@@ -105,7 +105,7 @@ export function CommsHub({
             No transmissions in this frequency yet.
           </div>
         ) : (
-          filteredMessages.map((msg) => {
+          filteredMessages.map((msg, idx) => {
             const isBetrayal = msg.type === "BETRAYAL";
             const isGhost = msg.type === "GHOST";
             const isClaim = msg.type === "CLAIM";
@@ -114,7 +114,7 @@ export function CommsHub({
 
             return (
               <div
-                key={msg.id}
+                key={`${msg.id}_${idx}`}
                 className={`p-2.5 rounded-xl border flex flex-col gap-1 text-xs font-mono transition-all
                   ${isBetrayal ? "bg-[#EF4444]/10 border-[#EF4444]/40 text-[#FCA5A5]" : ""}
                   ${isGhost ? "bg-[#94A3B8]/10 border-[#94A3B8]/30 text-[#E2E8F0] italic" : ""}

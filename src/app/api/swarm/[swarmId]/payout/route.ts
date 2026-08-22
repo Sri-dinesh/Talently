@@ -39,7 +39,7 @@ export async function POST(
       );
     }
 
-    if (swarmTask.requesterAddress !== requesterAddress.toLowerCase()) {
+    if (swarmTask.requesterAddress.toLowerCase() !== requesterAddress.toLowerCase()) {
       return NextResponse.json(
         { error: { code: "FORBIDDEN", message: "Only the requester can release escrow payouts" } },
         { status: 403 }
