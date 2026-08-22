@@ -1,17 +1,16 @@
 /**
- * Open Tasks Explorer Page
- * /tasks
- * Allows filtering by category, status, and search query with Realtime updates
+ * Open Tasks Explorer Page — Claude Brand Palette
+ * Allows filtering by category, status, and search query with real-time updates and warm styling
  */
 
 "use client";
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { PlusCircle, Search, Filter, RefreshCw, Cpu } from "lucide-react";
+import { PlusCircle, Search, Filter, RefreshCw, Layers } from "lucide-react";
 import { TaskCard } from "@/components/TaskCard";
 import { useTaskRealtime } from "@/hooks/useTaskRealtime";
-import type { Task, TaskStatus } from "@/types/task";
+import type { Task } from "@/types/task";
 
 const CATEGORIES = [
   "All",
@@ -61,15 +60,12 @@ export default function TasksPage() {
   }, []);
 
   const filteredTasks = realtimeTasks.filter((t) => {
-    // Category filter
     if (selectedCategory !== "All" && t.category !== selectedCategory) {
       return false;
     }
-    // Status filter
     if (selectedStatus !== "ALL" && t.status !== selectedStatus) {
       return false;
     }
-    // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchTitle = t.title.toLowerCase().includes(q);
@@ -85,18 +81,18 @@ export default function TasksPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#1A1A18] dark:text-[#F4F3EE]">
             Explore Micro-Tasks
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Browse live human tasks on Monad Testnet and claim instant escrow rewards.
+          <p className="text-xs sm:text-sm text-[#8A857B] dark:text-[#7D7970] mt-1 font-normal">
+            Browse live human tasks on Monad Testnet and claim instant escrow payouts.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             onClick={fetchTasks}
-            className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+            className="p-2.5 rounded-xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29] text-[#8A857B] dark:text-[#7D7970] hover:text-[#1A1A18] dark:hover:text-[#F4F3EE] transition-colors"
             title="Refresh tasks list"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -104,7 +100,7 @@ export default function TasksPage() {
 
           <Link
             href="/tasks/new"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#C15F3C] hover:bg-[#A84F30] active:scale-[0.985] text-white font-medium text-xs shadow-xs transition-all duration-150"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Post New Task</span>
@@ -113,17 +109,17 @@ export default function TasksPage() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="space-y-4 rounded-2xl bg-slate-900/60 border border-slate-800 p-4">
+      <div className="space-y-4 rounded-2xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29] p-4 sm:p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Search Input */}
           <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#B1ADA1]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by title, description, or skill..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Search by task title, description, or required skill..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#3A3A36] text-[#1A1A18] dark:text-[#F4F3EE] placeholder-[#8A857B] text-xs focus:outline-none focus:border-[#C15F3C] dark:focus:border-[#D97757] transition-all"
             />
           </div>
 
@@ -132,7 +128,7 @@ export default function TasksPage() {
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-white text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#3A3A36] text-[#1A1A18] dark:text-[#F4F3EE] text-xs focus:outline-none focus:border-[#C15F3C] dark:focus:border-[#D97757] transition-all cursor-pointer"
             >
               {STATUS_FILTERS.map((s) => (
                 <option key={s.value} value={s.value}>
@@ -145,17 +141,17 @@ export default function TasksPage() {
 
         {/* Category Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-          <span className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mr-1 shrink-0 flex items-center gap-1">
-            <Filter className="w-3 h-3" /> Category:
+          <span className="text-[#8A857B] dark:text-[#7D7970] text-[11px] font-medium mr-1 shrink-0 flex items-center gap-1">
+            <Filter className="w-3 h-3 text-[#B1ADA1]" /> Category:
           </span>
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1 rounded-lg font-medium transition-all shrink-0 ${
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-all shrink-0 ${
                 selectedCategory === cat
-                  ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
-                  : "bg-slate-950/80 text-slate-400 hover:text-white border border-slate-800"
+                  ? "bg-[#C15F3C] text-white shadow-xs"
+                  : "bg-[#F4F3EE] dark:bg-[#242422] text-[#6B665E] dark:text-[#B1ADA1] hover:text-[#1A1A18] dark:hover:text-[#F4F3EE] border border-[#E8E6DF] dark:border-[#3A3A36]"
               }`}
             >
               {cat}
@@ -166,25 +162,27 @@ export default function TasksPage() {
 
       {/* Tasks Grid */}
       {loading && filteredTasks.length === 0 ? (
-        <div className="p-16 text-center text-slate-500 space-y-2">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto text-purple-400" />
+        <div className="p-16 text-center text-[#8A857B] dark:text-[#7D7970] space-y-2">
+          <RefreshCw className="w-7 h-7 animate-spin mx-auto text-[#C15F3C] dark:text-[#D97757]" />
           <p className="text-xs">Loading open micro-tasks from Monad...</p>
         </div>
       ) : filteredTasks.length === 0 ? (
-        <div className="p-16 rounded-3xl bg-slate-900/40 border border-slate-800 text-center space-y-3">
-          <Cpu className="w-10 h-10 text-slate-600 mx-auto" />
-          <h3 className="text-base font-semibold text-slate-300">
+        <div className="p-16 rounded-2xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29] text-center space-y-3">
+          <div className="w-12 h-12 rounded-xl bg-[#F4F3EE] dark:bg-[#242422] flex items-center justify-center mx-auto text-[#B1ADA1]">
+            <Layers className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">
             No matching tasks found
           </h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+          <p className="text-xs text-[#8A857B] dark:text-[#7D7970] max-w-sm mx-auto">
             Try adjusting your search criteria, or post a new micro-task with instant escrow!
           </p>
           <div className="pt-2">
             <Link
               href="/tasks/new"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-500 transition-colors shadow-lg shadow-purple-600/20"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#C15F3C] text-white text-xs font-medium hover:bg-[#A84F30] transition-colors"
             >
-              <PlusCircle className="w-4 h-4" />
+              <PlusCircle className="w-3.5 h-3.5" />
               <span>Create Task</span>
             </Link>
           </div>
