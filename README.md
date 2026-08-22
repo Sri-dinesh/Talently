@@ -23,7 +23,7 @@ Human API is an on-chain escrow & real-time human micro-task marketplace on Mona
 - **Network**: Monad Testnet (Chain ID `10143` / `0x279f`)
 - **RPC URL**: `https://testnet-rpc.monad.xyz/`
 - **Explorer**: [https://testnet.monadexplorer.com](https://testnet.monadexplorer.com)
-- **Contract Address**: `0x3aB8749cD941F48C8b5773172E9D840888BEb1Fe` *(Configurable via `NEXT_PUBLIC_CONTRACT_ADDRESS`)*
+- **Contract Address**: [`0xAecc9F6CDd4ceeD0b04588E026b7049f219d3779`](https://testnet.monadexplorer.com/address/0xAecc9F6CDd4ceeD0b04588E026b7049f219d3779)
 - **Smart Contract Source**: [`contracts/src/HumanTaskEscrow.sol`](contracts/src/HumanTaskEscrow.sol)
 
 ---
