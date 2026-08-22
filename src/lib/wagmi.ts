@@ -7,9 +7,7 @@ export { monadTestnet };
 
 export const wagmiConfig = getDefaultConfig({
   appName: "Human API",
-  projectId:
-    process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ||
-    "3a8170812b534d0ff9d794f168fa75e8",
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "c0a5e82b79a14d5e89a2b4c5d6e7f809",
   chains: [monadTestnet],
   transports: {
     [monadTestnet.id]: http(
