@@ -1,4 +1,5 @@
 // src/types/task.ts
+import type { VerificationScorecard } from "./verification";
 
 export type TaskStatus =
   | "PENDING_CHAIN"
@@ -30,6 +31,7 @@ export interface Task {
   description: string;
   category: string | null;
   skills: string[];
+  requirements?: string[]; // Structured acceptance criteria checklist
   rewardWei: string; // Stored as decimal string to avoid BigInt JSON serialization errors
   estimatedMinutes: number | null;
   status: TaskStatus;
@@ -42,11 +44,15 @@ export interface Task {
   resultText: string | null;
   resultSeverity: "Low" | "Medium" | "High" | string | null;
   resultAttachmentUrl: string | null;
+  verificationScorecard?: VerificationScorecard | null; // 4-layer verification results
 
   createTxHash: string | null;
   acceptTxHash: string | null;
   submitTxHash: string | null;
   approveTxHash: string | null;
+
+  acceptedAt?: string | null; // For time-velocity calculation
+  submittedAt?: string | null;
 
   createdAt: string | Date;
   updatedAt: string | Date;

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import { db } from "@/lib/db";
 import { submitResultSchema } from "@/lib/validation";
+import { verifySubmission } from "@/lib/verification";
 
 export async function POST(
   req: NextRequest,
@@ -27,11 +28,32 @@ export async function POST(
     }
 
     const { resultText, resultSeverity, resultAttachmentUrl } = parsed.data;
+    const existingTask = await db.getTask(id);
+
+    const submittedAt = new Date().toISOString();
+
+    // Run 4-Layer Verification Engine
+    let verificationScorecard = null;
+    if (existingTask) {
+      try {
+        verificationScorecard = await verifySubmission(existingTask, {
+          resultText,
+          resultSeverity,
+          resultAttachmentUrl,
+          acceptedAt: existingTask.acceptedAt,
+          submittedAt,
+        });
+      } catch (err) {
+        console.warn("[Verification Engine] Execution error during submit:", err);
+      }
+    }
 
     const task = await db.updateTask(id, {
       resultText,
       resultSeverity: resultSeverity || null,
       resultAttachmentUrl: resultAttachmentUrl || null,
+      verificationScorecard,
+      submittedAt,
       status: "PENDING_SUBMIT",
     });
 

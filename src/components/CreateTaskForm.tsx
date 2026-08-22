@@ -65,6 +65,12 @@ export function CreateTaskForm() {
   const [category, setCategory] = useState("Testing");
   const [skillInput, setSkillInput] = useState("");
   const [skills, setSkills] = useState<string[]>(["QA", "Testing"]);
+  const [reqInput, setReqInput] = useState("");
+  const [requirements, setRequirements] = useState<string[]>([
+    "Test user flow on mobile / desktop",
+    "Report reproducible steps and friction points",
+    "Provide screenshot proof / log link",
+  ]);
   const [rewardEth, setRewardEth] = useState("0.02");
   const [estimatedMinutes, setEstimatedMinutes] = useState(10);
   const [isClassifying, setIsClassifying] = useState(false);
@@ -91,6 +97,18 @@ export function CreateTaskForm() {
     setSkills(skills.filter((s) => s !== skillToRemove));
   }
 
+  function handleAddRequirement() {
+    const trimmed = reqInput.trim();
+    if (trimmed && !requirements.includes(trimmed)) {
+      setRequirements([...requirements, trimmed]);
+      setReqInput("");
+    }
+  }
+
+  function handleRemoveRequirement(reqToRemove: string) {
+    setRequirements(requirements.filter((r) => r !== reqToRemove));
+  }
+
   async function handleAiClassify() {
     if (!description || description.length < 5) return;
     try {
@@ -109,6 +127,9 @@ export function CreateTaskForm() {
         }
         if (json.data.estimatedMinutes) {
           setEstimatedMinutes(json.data.estimatedMinutes);
+        }
+        if (json.data.requirements && json.data.requirements.length > 0) {
+          setRequirements(json.data.requirements);
         }
         setClassifySuccess(true);
         setTimeout(() => setClassifySuccess(false), 3000);
@@ -130,6 +151,7 @@ export function CreateTaskForm() {
         description,
         category,
         skills,
+        requirements,
         rewardEth,
         estimatedMinutes,
         requesterAddress: address,
@@ -310,6 +332,65 @@ export function CreateTaskForm() {
             </div>
           </div>
 
+          {/* Structured Acceptance Criteria Checklist */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF9F5] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#2C2C29] space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B665E] dark:text-[#B1ADA1]">
+                Acceptance Criteria Checklist
+              </label>
+              <span className="text-[11px] text-[#8A857B] dark:text-[#7D7970]">
+                {requirements.length} Criteria Required
+              </span>
+            </div>
+            <p className="text-[11px] text-[#8A857B] dark:text-[#7D7970]">
+              The 4-Layer Verification Engine will score submissions against these explicit requirements.
+            </p>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={reqInput}
+                onChange={(e) => setReqInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddRequirement();
+                  }
+                }}
+                placeholder="Add criteria (e.g. Provide screenshot of confirmation screen)"
+                className="flex-1 px-3.5 py-2 rounded-xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#3A3A36] text-[#1A1A18] dark:text-[#F4F3EE] placeholder-[#8A857B] focus:outline-none focus:border-[#C15F3C] text-xs"
+              />
+              <button
+                type="button"
+                onClick={handleAddRequirement}
+                className="px-3.5 py-2 rounded-xl bg-[#F4F3EE] dark:bg-[#242422] hover:bg-[#ECEAE4] dark:hover:bg-[#2C2C29] border border-[#E8E6DF] dark:border-[#3A3A36] text-[#1A1A18] dark:text-[#F4F3EE] text-xs font-medium transition-colors"
+              >
+                Add Rule
+              </button>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              {requirements.map((req, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29] text-xs"
+                >
+                  <div className="flex items-center gap-2 text-[#1A1A18] dark:text-[#F4F3EE]">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#2E7D32] dark:text-[#4CAF50] shrink-0" />
+                    <span>{req}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveRequirement(req)}
+                    className="text-[#8A857B] hover:text-[#C15F3C] font-bold px-1.5 py-0.5 rounded text-sm transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Reward in MON Escrow Card */}
           <div className="p-5 rounded-2xl bg-[#C15F3C]/5 dark:bg-[#D97757]/8 border border-[#C15F3C]/20 dark:border-[#D97757]/25">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -446,6 +527,10 @@ export function CreateTaskForm() {
           </div>
 
           <ul className="text-xs text-[#5C5851] dark:text-[#B1ADA1] space-y-2 leading-relaxed">
+            <li className="flex items-start gap-2">
+              <span className="text-[#2E7D32] font-bold">✓</span>
+              <span><strong>4-Layer Verification Engine</strong> — Submissions scored against explicit criteria with DeepSeek quality & fraud defense.</span>
+            </li>
             <li className="flex items-start gap-2">
               <span className="text-[#2E7D32] font-bold">✓</span>
               <span><strong>0% Protocol Fee</strong> — 100% of your deposit goes to the executing provider.</span>

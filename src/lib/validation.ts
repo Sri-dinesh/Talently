@@ -16,6 +16,7 @@ export const createTaskSchema = z.object({
     .enum(["Technical", "Design", "Knowledge", "Testing", "Social", "Local"])
     .optional(),
   skills: z.array(z.string()).default([]),
+  requirements: z.array(z.string()).default([]),
   rewardWei: z.string().refine((val) => {
     try {
       const b = BigInt(val);

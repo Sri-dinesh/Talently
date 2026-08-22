@@ -33,6 +33,7 @@ export async function POST(
     const task = await db.updateTask(id, {
       providerAddress,
       status: "PENDING_ACCEPT",
+      acceptedAt: new Date().toISOString(),
     });
 
     return NextResponse.json({ data: task });

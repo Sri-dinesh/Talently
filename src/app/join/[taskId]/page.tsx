@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { WalletConnectButton } from "@/components/WalletConnectButton";
 import { TaskStatusBadge } from "@/components/TaskStatusBadge";
+import { VerificationScorecard } from "@/components/VerificationScorecard";
 import { useAcceptTask } from "@/hooks/useAcceptTask";
 import { useSubmitResult } from "@/hooks/useSubmitResult";
 import { formatMon } from "@/lib/utils";
@@ -170,18 +171,34 @@ export default function JoinTaskPage({
           )}
         </div>
 
-        {/* Instructions */}
-        <div className="space-y-1.5">
+        {/* Instructions & Acceptance Criteria */}
+        <div className="space-y-2.5">
           <h3 className="text-xs font-semibold text-[#8A857B] dark:text-[#7D7970] uppercase tracking-wider">
-            Instructions
+            Instructions & Scope
           </h3>
           <div className="p-3.5 rounded-xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#2C2C29] text-xs text-[#1A1A18] dark:text-[#F4F3EE] leading-relaxed whitespace-pre-wrap">
             {task.description}
           </div>
+
+          {task.requirements && task.requirements.length > 0 && (
+            <div className="p-3 rounded-xl bg-[#FAF9F5] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#2C2C29] space-y-1.5">
+              <span className="text-[10px] font-semibold text-[#8A857B] dark:text-[#7D7970] uppercase tracking-wider block">
+                Required Acceptance Criteria
+              </span>
+              <div className="space-y-1">
+                {task.requirements.map((req, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 text-xs text-[#1A1A18] dark:text-[#F4F3EE]">
+                    <CheckCircle2 className="w-3 h-3 text-[#2E7D32] dark:text-[#4CAF50] shrink-0" />
+                    <span>{req}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* State Dependent Actions */}
-        <div className="pt-2">
+        <div className="pt-2 space-y-4">
           {!isConnected ? (
             <div className="space-y-3 text-center p-4 rounded-2xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#2C2C29]">
               <ShieldCheck className="w-5 h-5 text-[#C15F3C] mx-auto" />
@@ -245,7 +262,7 @@ export default function JoinTaskPage({
                   rows={3}
                   value={resultText}
                   onChange={(e) => setResultText(e.target.value)}
-                  placeholder="Enter your test findings or result..."
+                  placeholder="Enter your test findings or verified result..."
                   className="w-full px-3 py-2 rounded-xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#3A3A36] text-[#1A1A18] dark:text-[#F4F3EE] text-xs resize-none"
                 />
               </div>
@@ -269,26 +286,38 @@ export default function JoinTaskPage({
                 ) : (
                   <>
                     <Send className="w-3.5 h-3.5" />
-                    <span>Submit & Claim Reward</span>
+                    <span>Submit & Run Verification</span>
                   </>
                 )}
               </button>
             </form>
           ) : task.status === "SUBMITTED" ? (
-            <div className="p-4 rounded-2xl bg-[#F4F3EE] dark:bg-[#242422] border border-[#E8E6DF] dark:border-[#3A3A36] text-center space-y-1">
-              <CheckCircle2 className="w-6 h-6 text-[#C15F3C] mx-auto" />
-              <div className="text-xs font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">Result Submitted!</div>
-              <div className="text-[11px] text-[#8A857B] dark:text-[#7D7970]">
-                Awaiting requester approval for escrow release.
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-[#F4F3EE] dark:bg-[#242422] border border-[#E8E6DF] dark:border-[#3A3A36] text-center space-y-1">
+                <CheckCircle2 className="w-6 h-6 text-[#C15F3C] mx-auto" />
+                <div className="text-xs font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">Result Submitted!</div>
+                <div className="text-[11px] text-[#8A857B] dark:text-[#7D7970]">
+                  Verification engine has evaluated findings. Awaiting final requester payout release.
+                </div>
               </div>
+
+              {task.verificationScorecard && (
+                <VerificationScorecard scorecard={task.verificationScorecard} />
+              )}
             </div>
           ) : task.status === "APPROVED" ? (
-            <div className="p-4 rounded-2xl bg-[#2E7D32]/10 border border-[#2E7D32]/25 text-center space-y-1">
-              <CheckCircle2 className="w-6 h-6 text-[#2E7D32] dark:text-[#4CAF50] mx-auto" />
-              <div className="text-xs font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">Paid Out On-Chain!</div>
-              <div className="text-[11px] text-[#2E7D32] dark:text-[#4CAF50]">
-                {formatMon(task.rewardWei)} MON transferred to provider.
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-[#2E7D32]/10 border border-[#2E7D32]/25 text-center space-y-1">
+                <CheckCircle2 className="w-6 h-6 text-[#2E7D32] dark:text-[#4CAF50] mx-auto" />
+                <div className="text-xs font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">Paid Out On-Chain!</div>
+                <div className="text-[11px] text-[#2E7D32] dark:text-[#4CAF50]">
+                  {formatMon(task.rewardWei)} MON transferred to your wallet.
+                </div>
               </div>
+
+              {task.verificationScorecard && (
+                <VerificationScorecard scorecard={task.verificationScorecard} />
+              )}
             </div>
           ) : (
             <div className="text-center text-xs text-[#8A857B] dark:text-[#7D7970] py-2">

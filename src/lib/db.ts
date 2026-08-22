@@ -123,6 +123,7 @@ function formatTask(t: {
   description: string;
   category: string | null;
   skills: string[];
+  requirements?: string[];
   rewardWei: string;
   estimatedMinutes: number | null;
   status: string;
@@ -131,10 +132,13 @@ function formatTask(t: {
   resultText: string | null;
   resultSeverity: string | null;
   resultAttachmentUrl: string | null;
+  verificationScorecard?: any;
   createTxHash: string | null;
   acceptTxHash: string | null;
   submitTxHash: string | null;
   approveTxHash: string | null;
+  acceptedAt?: string | null;
+  submittedAt?: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
 }): Task {
@@ -145,6 +149,7 @@ function formatTask(t: {
     description: t.description,
     category: t.category || "Testing",
     skills: t.skills || [],
+    requirements: t.requirements || [],
     rewardWei: t.rewardWei,
     estimatedMinutes: t.estimatedMinutes,
     status: t.status as TaskStatus,
@@ -153,10 +158,13 @@ function formatTask(t: {
     resultText: t.resultText,
     resultSeverity: (t.resultSeverity as "Low" | "Medium" | "High") || null,
     resultAttachmentUrl: t.resultAttachmentUrl,
+    verificationScorecard: t.verificationScorecard || null,
     createTxHash: t.createTxHash,
     acceptTxHash: t.acceptTxHash,
     submitTxHash: t.submitTxHash,
     approveTxHash: t.approveTxHash,
+    acceptedAt: t.acceptedAt || null,
+    submittedAt: t.submittedAt || null,
     createdAt:
       t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
     updatedAt:
@@ -302,6 +310,7 @@ export const db = {
     description: string;
     category?: string;
     skills?: string[];
+    requirements?: string[];
     rewardWei: string;
     estimatedMinutes?: number | null;
     requesterAddress: string;
@@ -316,6 +325,7 @@ export const db = {
       description: data.description,
       category: data.category || "Testing",
       skills: data.skills || [],
+      requirements: data.requirements || [],
       rewardWei: data.rewardWei,
       estimatedMinutes: data.estimatedMinutes || null,
       status: "PENDING_CHAIN",
@@ -324,10 +334,13 @@ export const db = {
       resultText: null,
       resultSeverity: null,
       resultAttachmentUrl: null,
+      verificationScorecard: null,
       createTxHash: null,
       acceptTxHash: null,
       submitTxHash: null,
       approveTxHash: null,
+      acceptedAt: null,
+      submittedAt: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -380,6 +393,7 @@ export const db = {
       description: string;
       category: string | null;
       skills: string[];
+      requirements: string[];
       rewardWei: string;
       estimatedMinutes: number | null;
       status: TaskStatus;
@@ -387,10 +401,13 @@ export const db = {
       resultText: string | null;
       resultSeverity: "Low" | "Medium" | "High" | string | null;
       resultAttachmentUrl: string | null;
+      verificationScorecard: any;
       createTxHash: string | null;
       acceptTxHash: string | null;
       submitTxHash: string | null;
       approveTxHash: string | null;
+      acceptedAt: string | null;
+      submittedAt: string | null;
     }>
   ): Promise<Task> {
     loadFromDisk();
@@ -404,6 +421,7 @@ export const db = {
         description: "",
         category: "Testing",
         skills: [],
+        requirements: [],
         rewardWei: "0",
         estimatedMinutes: null,
         status: "OPEN",
@@ -412,10 +430,13 @@ export const db = {
         resultText: null,
         resultSeverity: null,
         resultAttachmentUrl: null,
+        verificationScorecard: null,
         createTxHash: null,
         acceptTxHash: null,
         submitTxHash: null,
         approveTxHash: null,
+        acceptedAt: null,
+        submittedAt: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }),
@@ -426,15 +447,21 @@ export const db = {
       ...(data.providerAddress !== undefined
         ? { providerAddress: data.providerAddress ? data.providerAddress.toLowerCase() : null }
         : {}),
+      ...(data.requirements !== undefined ? { requirements: data.requirements } : {}),
       ...(data.resultText !== undefined ? { resultText: data.resultText } : {}),
       ...(data.resultSeverity !== undefined ? { resultSeverity: data.resultSeverity } : {}),
       ...(data.resultAttachmentUrl !== undefined
         ? { resultAttachmentUrl: data.resultAttachmentUrl }
         : {}),
+      ...(data.verificationScorecard !== undefined
+        ? { verificationScorecard: data.verificationScorecard }
+        : {}),
       ...(data.createTxHash !== undefined ? { createTxHash: data.createTxHash } : {}),
       ...(data.acceptTxHash !== undefined ? { acceptTxHash: data.acceptTxHash } : {}),
       ...(data.submitTxHash !== undefined ? { submitTxHash: data.submitTxHash } : {}),
       ...(data.approveTxHash !== undefined ? { approveTxHash: data.approveTxHash } : {}),
+      ...(data.acceptedAt !== undefined ? { acceptedAt: data.acceptedAt } : {}),
+      ...(data.submittedAt !== undefined ? { submittedAt: data.submittedAt } : {}),
       updatedAt: new Date().toISOString(),
     };
 

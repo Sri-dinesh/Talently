@@ -9,6 +9,7 @@ export type CreateTaskInput = {
   description: string;
   category?: string;
   skills?: string[];
+  requirements?: string[];
   rewardEth: string; // human-entered "0.01", converted to wei internally
   estimatedMinutes?: number;
   requesterAddress: string;

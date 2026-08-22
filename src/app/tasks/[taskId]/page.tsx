@@ -27,6 +27,7 @@ import {
 import confetti from "canvas-confetti";
 import { TaskStatusBadge } from "@/components/TaskStatusBadge";
 import { WalletConnectButton } from "@/components/WalletConnectButton";
+import { VerificationScorecard } from "@/components/VerificationScorecard";
 import { useAcceptTask } from "@/hooks/useAcceptTask";
 import { useSubmitResult } from "@/hooks/useSubmitResult";
 import { useApproveTask } from "@/hooks/useApproveTask";
@@ -293,14 +294,30 @@ export default function TaskDetailPage({
           </div>
         </div>
 
-        {/* Task Description */}
-        <div className="space-y-2">
+        {/* Task Description & Acceptance Criteria */}
+        <div className="space-y-3">
           <h3 className="text-xs font-semibold text-[#8A857B] dark:text-[#7D7970] uppercase tracking-wider">
-            Instructions & Criteria
+            Instructions & Scope
           </h3>
           <div className="p-4 rounded-2xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#2C2C29] text-[#1A1A18] dark:text-[#F4F3EE] text-sm leading-relaxed whitespace-pre-wrap">
             {task.description}
           </div>
+
+          {task.requirements && task.requirements.length > 0 && (
+            <div className="p-4 rounded-2xl bg-[#FAF9F5] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#2C2C29] space-y-2">
+              <span className="text-[11px] font-semibold text-[#8A857B] dark:text-[#7D7970] uppercase tracking-wider block">
+                Explicit Acceptance Criteria Checklist
+              </span>
+              <div className="space-y-1.5">
+                {task.requirements.map((req, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-xs text-[#1A1A18] dark:text-[#F4F3EE]">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#2E7D32] dark:text-[#4CAF50] shrink-0" />
+                    <span>{req}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Skill Tags & Addresses */}
@@ -582,6 +599,11 @@ export default function TaskDetailPage({
               )}
             </div>
 
+            {/* 4-Layer Automated Verification Scorecard */}
+            {task.verificationScorecard && (
+              <VerificationScorecard scorecard={task.verificationScorecard} />
+            )}
+
             {isRequester ? (
               <div className="space-y-3 pt-2">
                 {approveError && (
@@ -606,7 +628,11 @@ export default function TaskDetailPage({
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Approve Result & Release {formatMon(task.rewardWei)} MON</span>
+                      <span>
+                        {task.verificationScorecard?.verdict === "PASS"
+                          ? "Auto-Verified ✓ Release Escrow Payout (" + formatMon(task.rewardWei) + " MON)"
+                          : "Approve Result & Release " + formatMon(task.rewardWei) + " MON"}
+                      </span>
                     </>
                   )}
                 </button>
@@ -621,16 +647,25 @@ export default function TaskDetailPage({
 
         {/* State: APPROVED (Completed) */}
         {task.status === "APPROVED" && (
-          <div className="p-6 sm:p-8 rounded-3xl bg-[#2E7D32]/5 border border-[#2E7D32]/25 space-y-4 text-center">
+          <div className="p-6 sm:p-8 rounded-3xl bg-[#2E7D32]/5 border border-[#2E7D32]/25 space-y-6 text-center">
             <div className="w-12 h-12 rounded-2xl bg-[#2E7D32]/15 text-[#2E7D32] dark:text-[#4CAF50] flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">
-              Task Completed & Payout Released!
-            </h3>
-            <p className="text-xs text-[#5C5851] dark:text-[#B1ADA1] max-w-md mx-auto">
-              The requester approved the submission and {formatMon(task.rewardWei)} MON was transferred directly to the provider on Monad.
-            </p>
+            <div className="space-y-1">
+              <h3 className="text-lg font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">
+                Task Completed & Payout Released!
+              </h3>
+              <p className="text-xs text-[#5C5851] dark:text-[#B1ADA1] max-w-md mx-auto">
+                The requester approved the submission and {formatMon(task.rewardWei)} MON was transferred directly to the provider on Monad.
+              </p>
+            </div>
+
+            {/* Verification Scorecard for completed audit */}
+            {task.verificationScorecard && (
+              <div className="text-left">
+                <VerificationScorecard scorecard={task.verificationScorecard} />
+              </div>
+            )}
 
             {/* Result Preview */}
             {task.resultText && (
