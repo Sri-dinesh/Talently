@@ -2,11 +2,17 @@
 import { prisma } from "./prisma";
 import type { Task, User, TaskStatus } from "@/types/task";
 
-// In-memory store fallback for offline / development when Postgres is unconfigured
-const memoryStore = {
-  tasks: new Map<string, Task>(),
-  users: new Map<string, User>(),
+// Global in-memory store shared across all Next.js server route closures
+const globalForMemory = globalThis as unknown as {
+  memoryTasks: Map<string, Task> | undefined;
+  memoryUsers: Map<string, User> | undefined;
 };
+
+const memoryTasks = globalForMemory.memoryTasks ?? new Map<string, Task>();
+const memoryUsers = globalForMemory.memoryUsers ?? new Map<string, User>();
+
+globalForMemory.memoryTasks = memoryTasks;
+globalForMemory.memoryUsers = memoryUsers;
 
 export function isDbConfigured(): boolean {
   const url = process.env.DATABASE_URL;
@@ -48,6 +54,15 @@ export const db = {
           },
         });
 
+        // Sync to memory
+        for (const t of tasks) {
+          const formatted = {
+            ...t,
+            onChainId: t.onChainId ? t.onChainId.toString() : null,
+          } as Task;
+          memoryTasks.set(t.id, formatted);
+        }
+
         return tasks.map((t) => ({
           ...t,
           onChainId: t.onChainId ? t.onChainId.toString() : null,
@@ -57,8 +72,8 @@ export const db = {
       }
     }
 
-    // Fallback: in-memory store
-    let tasks = Array.from(memoryStore.tasks.values());
+    // Fallback: global in-memory store
+    let tasks = Array.from(memoryTasks.values());
     if (filters?.status) {
       tasks = tasks.filter((t) => t.status === filters.status);
     }
@@ -83,10 +98,19 @@ export const db = {
       );
     }
 
+    // Sort newest first
+    tasks.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
     return tasks.slice(0, filters?.limit || 50);
   },
 
   async getTask(id: string): Promise<Task | null> {
+    // Check in-memory store first for instant lookup
+    const cached = memoryTasks.get(id);
+
     if (isDbConfigured()) {
       try {
         const task = await prisma.task.findUnique({
@@ -94,17 +118,19 @@ export const db = {
           include: { requester: true, provider: true },
         });
         if (task) {
-          return {
+          const formatted = {
             ...task,
             onChainId: task.onChainId ? task.onChainId.toString() : null,
           } as Task;
+          memoryTasks.set(id, formatted);
+          return formatted;
         }
       } catch (err) {
         console.warn("Prisma findUnique failed, using memory fallback:", err);
       }
     }
 
-    return memoryStore.tasks.get(id) || null;
+    return cached || null;
   },
 
   async createTask(data: {
@@ -118,6 +144,32 @@ export const db = {
   }): Promise<Task> {
     const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const normalizedRequester = data.requesterAddress.toLowerCase();
+
+    const taskData: Task = {
+      id,
+      onChainId: null,
+      title: data.title,
+      description: data.description,
+      category: data.category || "Testing",
+      skills: data.skills || [],
+      rewardWei: data.rewardWei,
+      estimatedMinutes: data.estimatedMinutes || 15,
+      status: "PENDING_CHAIN",
+      requesterAddress: normalizedRequester,
+      providerAddress: null,
+      resultText: null,
+      resultSeverity: null,
+      resultAttachmentUrl: null,
+      createTxHash: null,
+      acceptTxHash: null,
+      submitTxHash: null,
+      approveTxHash: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Save in global memory immediately
+    memoryTasks.set(id, taskData);
 
     if (isDbConfigured()) {
       try {
@@ -144,43 +196,32 @@ export const db = {
           },
         });
 
-        return {
+        const formatted = {
           ...created,
           onChainId: null,
         } as Task;
+
+        memoryTasks.set(id, formatted);
+        return formatted;
       } catch (err) {
-        console.warn("Prisma create failed, falling back to memory store:", err);
+        console.warn("Prisma create failed, continuing with memory store:", err);
       }
     }
 
-    const memoryTask: Task = {
-      id,
-      onChainId: null,
-      title: data.title,
-      description: data.description,
-      category: data.category || "Testing",
-      skills: data.skills || [],
-      rewardWei: data.rewardWei,
-      estimatedMinutes: data.estimatedMinutes || 15,
-      status: "PENDING_CHAIN",
-      requesterAddress: normalizedRequester,
-      providerAddress: null,
-      resultText: null,
-      resultSeverity: null,
-      resultAttachmentUrl: null,
-      createTxHash: null,
-      acceptTxHash: null,
-      submitTxHash: null,
-      approveTxHash: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    memoryStore.tasks.set(id, memoryTask);
-    return memoryTask;
+    return taskData;
   },
 
   async updateTask(id: string, updates: Partial<Task>): Promise<Task | null> {
+    const existing = memoryTasks.get(id);
+    const merged: Task = {
+      ...(existing || ({} as Task)),
+      ...updates,
+      id,
+      updatedAt: new Date().toISOString(),
+    } as Task;
+
+    memoryTasks.set(id, merged);
+
     if (isDbConfigured()) {
       try {
         const prismaUpdates: any = { ...updates };
@@ -195,45 +236,41 @@ export const db = {
           data: prismaUpdates,
         });
 
-        return {
+        const formatted = {
           ...updated,
           onChainId: updated.onChainId ? updated.onChainId.toString() : null,
         } as Task;
+
+        memoryTasks.set(id, formatted);
+        return formatted;
       } catch (err) {
-        console.warn("Prisma update failed, updating memory store:", err);
+        console.warn("Prisma update failed, updated in memory store:", err);
       }
     }
 
-    const existing = memoryStore.tasks.get(id);
-    if (!existing) return null;
-
-    const merged: Task = {
-      ...existing,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-
-    memoryStore.tasks.set(id, merged);
     return merged;
   },
 
   async getUser(address: string): Promise<User> {
     const normalized = address.toLowerCase();
+    const cached = memoryUsers.get(normalized);
 
     if (isDbConfigured()) {
       try {
         const user = await prisma.user.findUnique({
           where: { address: normalized },
         });
-        if (user) return user as User;
+        if (user) {
+          memoryUsers.set(normalized, user as User);
+          return user as User;
+        }
       } catch (err) {
         console.warn("Prisma getUser failed, using memory store:", err);
       }
     }
 
-    let memoryUser = memoryStore.users.get(normalized);
-    if (!memoryUser) {
-      memoryUser = {
+    if (!cached) {
+      const newUser: User = {
         address: normalized,
         displayName: null,
         skills: [],
@@ -243,10 +280,11 @@ export const db = {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      memoryStore.users.set(normalized, memoryUser);
+      memoryUsers.set(normalized, newUser);
+      return newUser;
     }
 
-    return memoryUser;
+    return cached;
   },
 
   async getAvailableUsers(): Promise<User[]> {
@@ -257,17 +295,28 @@ export const db = {
           take: 12,
           orderBy: { tasksApproved: "desc" },
         });
+        for (const u of users) {
+          memoryUsers.set(u.address.toLowerCase(), u as User);
+        }
         return users as User[];
       } catch (err) {
         console.warn("Prisma getAvailableUsers failed:", err);
       }
     }
 
-    return Array.from(memoryStore.users.values()).filter((u) => u.isAvailable);
+    return Array.from(memoryUsers.values()).filter((u) => u.isAvailable);
   },
 
   async updateUser(address: string, updates: Partial<User>): Promise<User> {
     const normalized = address.toLowerCase();
+    const current = await this.getUser(normalized);
+    const merged: User = {
+      ...current,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+
+    memoryUsers.set(normalized, merged);
 
     if (isDbConfigured()) {
       try {
@@ -281,20 +330,13 @@ export const db = {
             isAvailable: updates.isAvailable || false,
           },
         });
+        memoryUsers.set(normalized, updated as User);
         return updated as User;
       } catch (err) {
-        console.warn("Prisma updateUser failed, using memory store:", err);
+        console.warn("Prisma updateUser failed, updated in memory store:", err);
       }
     }
 
-    const current = await this.getUser(normalized);
-    const merged: User = {
-      ...current,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-
-    memoryStore.users.set(normalized, merged);
     return merged;
   },
 };
