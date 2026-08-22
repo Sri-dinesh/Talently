@@ -1,5 +1,7 @@
 // src/app/api/tasks/[id]/submit/route.ts
 import { NextRequest, NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 import { db } from "@/lib/db";
 import { submitResultSchema } from "@/lib/validation";
 

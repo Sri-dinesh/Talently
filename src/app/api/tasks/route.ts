@@ -1,5 +1,7 @@
 // src/app/api/tasks/route.ts
 import { NextRequest, NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 import { db } from "@/lib/db";
 import { createTaskSchema } from "@/lib/validation";
 import type { TaskStatus } from "@/types/task";

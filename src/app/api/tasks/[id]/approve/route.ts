@@ -1,5 +1,7 @@
 // src/app/api/tasks/[id]/approve/route.ts
 import { NextRequest, NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 import { db } from "@/lib/db";
 
 export async function POST(

@@ -1,5 +1,7 @@
 // src/app/api/tasks/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 import { db } from "@/lib/db";
 import { patchTaskSchema } from "@/lib/validation";
 import { createPublicClient, http, decodeEventLog, type Hash } from "viem";
@@ -166,8 +168,8 @@ export async function PATCH(
       if (task.providerAddress) {
         const user = await db.getUser(task.providerAddress);
         await db.updateUser(task.providerAddress, {
-          tasksApproved: (user.tasksApproved || 0) + 1,
-          tasksCompleted: (user.tasksCompleted || 0) + 1,
+          tasksApproved: ((user && user.tasksApproved) || 0) + 1,
+          tasksCompleted: ((user && user.tasksCompleted) || 0) + 1,
         });
       }
     } else if (expectedTransition === "cancel") {

@@ -1,6 +1,12 @@
 // src/lib/db.ts
+import fs from "fs";
+import path from "path";
 import { prisma } from "./prisma";
 import type { Task, User, TaskStatus } from "@/types/task";
+
+const DATA_DIR = path.join(process.cwd(), ".data");
+const TASKS_FILE = path.join(DATA_DIR, "tasks.json");
+const USERS_FILE = path.join(DATA_DIR, "users.json");
 
 // Global in-memory store shared across all Next.js server route closures
 const globalForMemory = globalThis as unknown as {
@@ -17,8 +23,63 @@ const memoryUsers: Map<string, User> =
 globalForMemory.memoryTasks = memoryTasks;
 globalForMemory.memoryUsers = memoryUsers;
 
+// Hydrate from persistent disk store on startup
+function loadFromDisk(): void {
+  try {
+    if (fs.existsSync(TASKS_FILE)) {
+      const raw = fs.readFileSync(TASKS_FILE, "utf-8");
+      const tasks: Task[] = JSON.parse(raw);
+      memoryTasks.clear();
+      for (const t of tasks) {
+        memoryTasks.set(t.id, t);
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    if (fs.existsSync(USERS_FILE)) {
+      const raw = fs.readFileSync(USERS_FILE, "utf-8");
+      const users: User[] = JSON.parse(raw);
+      memoryUsers.clear();
+      for (const u of users) {
+        const addr = u.address.toLowerCase();
+        memoryUsers.set(addr, u);
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+// Persist memory store to disk
+function saveToDisk(): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(
+      TASKS_FILE,
+      JSON.stringify(Array.from(memoryTasks.values()), null, 2),
+      "utf-8"
+    );
+    fs.writeFileSync(
+      USERS_FILE,
+      JSON.stringify(Array.from(memoryUsers.values()), null, 2),
+      "utf-8"
+    );
+  } catch {
+    // ignore
+  }
+}
+
+// Initial hydration
+loadFromDisk();
+
 export function isDbConfigured(): boolean {
   if (globalForMemory.dbDisabled) return false;
+  if (process.env.USE_PRISMA !== "true") return false;
   const url = process.env.DATABASE_URL;
   return Boolean(
     url &&
@@ -37,13 +98,10 @@ function handlePrismaError(err: unknown): void {
     errMsg.includes("ECONNREFUSED")
   ) {
     globalForMemory.dbDisabled = true;
-    console.warn(
-      "[Human API DB] Database unreachable or timed out. Operating on high-speed global in-memory store."
-    );
   }
 }
 
-async function withTimeout<T>(promise: Promise<T>, ms = 1500): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, ms = 1000): Promise<T> {
   let timeoutId: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error("DB timeout")), ms);
@@ -139,6 +197,8 @@ export const db = {
     providerAddress?: string;
     limit?: number;
   }): Promise<Task[]> {
+    loadFromDisk();
+
     if (isDbConfigured()) {
       try {
         const whereClause: Record<string, unknown> = {};
@@ -169,7 +229,7 @@ export const db = {
           memoryTasks.set(formatted.id, formatted);
           result.push(formatted);
         }
-
+        saveToDisk();
         return result;
       } catch (err) {
         handlePrismaError(err);
@@ -211,6 +271,7 @@ export const db = {
   },
 
   async getTask(id: string): Promise<Task | null> {
+    loadFromDisk();
     const cached = memoryTasks.get(id);
     if (cached) return cached;
 
@@ -225,6 +286,7 @@ export const db = {
         if (raw) {
           const formatted = formatTask(raw);
           memoryTasks.set(id, formatted);
+          saveToDisk();
           return formatted;
         }
       } catch (err) {
@@ -255,7 +317,7 @@ export const db = {
       category: data.category || "Testing",
       skills: data.skills || [],
       rewardWei: data.rewardWei,
-      estimatedMinutes: data.estimatedMinutes || 15,
+      estimatedMinutes: data.estimatedMinutes || null,
       status: "PENDING_CHAIN",
       requesterAddress: normalizedRequester,
       providerAddress: null,
@@ -271,67 +333,151 @@ export const db = {
     };
 
     memoryTasks.set(id, taskData);
+    saveToDisk();
 
     if (isDbConfigured()) {
-      withTimeout(
-        prisma.user
-          .upsert({
+      try {
+        await withTimeout(
+          prisma.user.upsert({
             where: { address: normalizedRequester },
             update: {},
-            create: { address: normalizedRequester, skills: [] },
+            create: { address: normalizedRequester },
           })
-          .then(() =>
-            prisma.task.create({
-              data: {
-                id,
-                title: data.title,
-                description: data.description,
-                category: data.category || "Testing",
-                skills: data.skills || [],
-                rewardWei: data.rewardWei,
-                estimatedMinutes: data.estimatedMinutes || 15,
-                status: "PENDING_CHAIN",
-                requesterAddress: normalizedRequester,
-              },
-            })
-          )
-      ).catch((err) => handlePrismaError(err));
+        );
+
+        const created = await withTimeout(
+          prisma.task.create({
+            data: {
+              id,
+              title: data.title,
+              description: data.description,
+              category: data.category,
+              skills: data.skills || [],
+              rewardWei: data.rewardWei,
+              estimatedMinutes: data.estimatedMinutes,
+              status: "PENDING_CHAIN",
+              requesterAddress: normalizedRequester,
+            },
+          })
+        );
+        const formatted = formatTask(created);
+        memoryTasks.set(id, formatted);
+        saveToDisk();
+        return formatted;
+      } catch (err) {
+        handlePrismaError(err);
+      }
     }
 
     return taskData;
   },
 
-  async updateTask(id: string, updates: Partial<Task>): Promise<Task | null> {
+  async updateTask(
+    id: string,
+    data: Partial<{
+      onChainId: string | number | bigint | null;
+      title: string;
+      description: string;
+      category: string | null;
+      skills: string[];
+      rewardWei: string;
+      estimatedMinutes: number | null;
+      status: TaskStatus;
+      providerAddress: string | null;
+      resultText: string | null;
+      resultSeverity: "Low" | "Medium" | "High" | string | null;
+      resultAttachmentUrl: string | null;
+      createTxHash: string | null;
+      acceptTxHash: string | null;
+      submitTxHash: string | null;
+      approveTxHash: string | null;
+    }>
+  ): Promise<Task> {
+    loadFromDisk();
     const existing = memoryTasks.get(id);
-    const merged: Task = {
-      ...(existing || ({} as Task)),
-      ...updates,
-      id,
-      updatedAt: new Date().toISOString(),
-    } as Task;
 
-    memoryTasks.set(id, merged);
+    const updatedTask: Task = {
+      ...(existing || {
+        id,
+        onChainId: null,
+        title: "",
+        description: "",
+        category: "Testing",
+        skills: [],
+        rewardWei: "0",
+        estimatedMinutes: null,
+        status: "OPEN",
+        requesterAddress: "",
+        providerAddress: null,
+        resultText: null,
+        resultSeverity: null,
+        resultAttachmentUrl: null,
+        createTxHash: null,
+        acceptTxHash: null,
+        submitTxHash: null,
+        approveTxHash: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+      ...(data.onChainId !== undefined
+        ? { onChainId: data.onChainId ? data.onChainId.toString() : null }
+        : {}),
+      ...(data.status ? { status: data.status } : {}),
+      ...(data.providerAddress !== undefined
+        ? { providerAddress: data.providerAddress ? data.providerAddress.toLowerCase() : null }
+        : {}),
+      ...(data.resultText !== undefined ? { resultText: data.resultText } : {}),
+      ...(data.resultSeverity !== undefined ? { resultSeverity: data.resultSeverity } : {}),
+      ...(data.resultAttachmentUrl !== undefined
+        ? { resultAttachmentUrl: data.resultAttachmentUrl }
+        : {}),
+      ...(data.createTxHash !== undefined ? { createTxHash: data.createTxHash } : {}),
+      ...(data.acceptTxHash !== undefined ? { acceptTxHash: data.acceptTxHash } : {}),
+      ...(data.submitTxHash !== undefined ? { submitTxHash: data.submitTxHash } : {}),
+      ...(data.approveTxHash !== undefined ? { approveTxHash: data.approveTxHash } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+
+    memoryTasks.set(id, updatedTask);
+    saveToDisk();
 
     if (isDbConfigured()) {
-      const prismaUpdates: Record<string, unknown> = { ...updates };
-      if (updates.onChainId !== undefined) {
-        prismaUpdates.onChainId = updates.onChainId
-          ? BigInt(updates.onChainId.toString())
-          : null;
-      }
+      try {
+        const updateData: Record<string, unknown> = { ...data };
+        if (data.onChainId !== undefined) {
+          updateData.onChainId = data.onChainId ? BigInt(data.onChainId.toString()) : null;
+        }
+        if (data.providerAddress) {
+          updateData.providerAddress = data.providerAddress.toLowerCase();
+          await withTimeout(
+            prisma.user.upsert({
+              where: { address: data.providerAddress.toLowerCase() },
+              update: {},
+              create: { address: data.providerAddress.toLowerCase() },
+            })
+          );
+        }
 
-      withTimeout(
-        prisma.task.update({
-          where: { id },
-          data: prismaUpdates,
-        })
-      ).catch((err) => handlePrismaError(err));
+        const raw = await withTimeout(
+          prisma.task.update({
+            where: { id },
+            data: updateData,
+          })
+        );
+        const formatted = formatTask(raw);
+        memoryTasks.set(id, formatted);
+        saveToDisk();
+        return formatted;
+      } catch (err) {
+        handlePrismaError(err);
+      }
     }
 
-    return merged;
+    return updatedTask;
   },
 
-  async getUser(address: string): Promise<User> {
+  async getUser(address: string): Promise<User | null> {
+    loadFromDisk();
     const normalized = address.toLowerCase();
     const cached = memoryUsers.get(normalized);
     if (cached) return cached;
@@ -341,11 +487,16 @@ export const db = {
         const raw = await withTimeout(
           prisma.user.findUnique({
             where: { address: normalized },
+            include: {
+              tasksRequested: { orderBy: { createdAt: "desc" } },
+              tasksProvided: { orderBy: { createdAt: "desc" } },
+            },
           })
         );
         if (raw) {
           const formatted = formatUser(raw);
           memoryUsers.set(normalized, formatted);
+          saveToDisk();
           return formatted;
         }
       } catch (err) {
@@ -353,7 +504,8 @@ export const db = {
       }
     }
 
-    const newUser: User = {
+    // Default clean user profile (unpersisted until saved)
+    return {
       address: normalized,
       displayName: null,
       skills: [],
@@ -363,61 +515,87 @@ export const db = {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    memoryUsers.set(normalized, newUser);
-    return newUser;
+  },
+
+  async updateUser(
+    address: string,
+    data: {
+      displayName?: string;
+      skills?: string[];
+      isAvailable?: boolean;
+      tasksCompleted?: number;
+      tasksApproved?: number;
+    }
+  ): Promise<User> {
+    loadFromDisk();
+    const normalized = address.toLowerCase();
+    const existing = memoryUsers.get(normalized) || {
+      address: normalized,
+      displayName: null,
+      skills: [],
+      tasksCompleted: 0,
+      tasksApproved: 0,
+      isAvailable: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updated: User = {
+      ...existing,
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    memoryUsers.set(normalized, updated);
+    saveToDisk();
+
+    if (isDbConfigured()) {
+      try {
+        const raw = await withTimeout(
+          prisma.user.upsert({
+            where: { address: normalized },
+            update: data,
+            create: {
+              address: normalized,
+              ...data,
+            },
+          })
+        );
+        const formatted = formatUser(raw);
+        memoryUsers.set(normalized, formatted);
+        saveToDisk();
+        return formatted;
+      } catch (err) {
+        handlePrismaError(err);
+      }
+    }
+
+    return updated;
   },
 
   async getAvailableUsers(): Promise<User[]> {
+    loadFromDisk();
     if (isDbConfigured()) {
       try {
-        const rawUsers = await withTimeout(
+        const raw = await withTimeout(
           prisma.user.findMany({
             where: { isAvailable: true },
-            take: 12,
             orderBy: { tasksApproved: "desc" },
+            take: 12,
           })
         );
-        const result: User[] = [];
-        for (const raw of rawUsers) {
-          const formatted = formatUser(raw);
-          memoryUsers.set(formatted.address.toLowerCase(), formatted);
-          result.push(formatted);
+        const result = raw.map((u) => formatUser(u));
+        for (const u of result) {
+          memoryUsers.set(u.address.toLowerCase(), u);
         }
+        saveToDisk();
         return result;
       } catch (err) {
         handlePrismaError(err);
       }
     }
 
-    return Array.from(memoryUsers.values()).filter((u) => u.isAvailable);
-  },
-
-  async updateUser(address: string, updates: Partial<User>): Promise<User> {
-    const normalized = address.toLowerCase();
-    const current = await this.getUser(normalized);
-    const merged: User = {
-      ...current,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-
-    memoryUsers.set(normalized, merged);
-
-    if (isDbConfigured()) {
-      withTimeout(
-        prisma.user.upsert({
-          where: { address: normalized },
-          update: updates,
-          create: {
-            address: normalized,
-            displayName: updates.displayName || null,
-            skills: updates.skills || [],
-            isAvailable: updates.isAvailable || false,
-          },
-        })
-      ).catch((err) => handlePrismaError(err));
-    }
-
-    return merged;
+    const users = Array.from(memoryUsers.values()).filter((u) => u.isAvailable);
+    return users.sort((a, b) => b.tasksApproved - a.tasksApproved);
   },
 };
