@@ -1,6 +1,6 @@
 /**
- * TaskStatusBadge Component
- * Displays styled badge for task status states
+ * TaskStatusBadge Component - Claude Brand Palette
+ * Styled with warm Crail, Sage, Amber, and Cloudy stone palettes
  */
 
 import React from "react";
@@ -12,73 +12,73 @@ const statusConfig: Record<
 > = {
   PENDING_CHAIN: {
     label: "Locking Escrow",
-    bg: "bg-amber-950/40",
-    text: "text-amber-300",
-    border: "border-amber-700/50",
-    dot: "bg-amber-400 animate-pulse",
+    bg: "bg-[#C15F3C]/10 dark:bg-[#D97757]/15",
+    text: "text-[#C15F3C] dark:text-[#D97757]",
+    border: "border-[#C15F3C]/25 dark:border-[#D97757]/30",
+    dot: "bg-[#C15F3C] dark:bg-[#D97757] animate-pulse",
   },
   OPEN: {
-    label: "Open",
-    bg: "bg-emerald-950/40",
-    text: "text-emerald-300",
-    border: "border-emerald-700/50",
-    dot: "bg-emerald-400",
+    label: "Open for Claim",
+    bg: "bg-[#2E7D32]/10 dark:bg-[#4CAF50]/15",
+    text: "text-[#2E7D32] dark:text-[#4CAF50]",
+    border: "border-[#2E7D32]/25 dark:border-[#4CAF50]/30",
+    dot: "bg-[#2E7D32] dark:bg-[#4CAF50]",
   },
   PENDING_ACCEPT: {
-    label: "Accepting...",
-    bg: "bg-sky-950/40",
-    text: "text-sky-300",
-    border: "border-sky-700/50",
-    dot: "bg-sky-400 animate-pulse",
+    label: "Claiming...",
+    bg: "bg-[#C26C00]/10 dark:bg-[#F59E0B]/15",
+    text: "text-[#C26C00] dark:text-[#F59E0B]",
+    border: "border-[#C26C00]/25 dark:border-[#F59E0B]/30",
+    dot: "bg-[#C26C00] dark:bg-[#F59E0B] animate-pulse",
   },
   ACCEPTED: {
     label: "In Progress",
-    bg: "bg-blue-950/40",
-    text: "text-blue-300",
-    border: "border-blue-700/50",
-    dot: "bg-blue-400",
+    bg: "bg-[#C26C00]/10 dark:bg-[#F59E0B]/15",
+    text: "text-[#C26C00] dark:text-[#F59E0B]",
+    border: "border-[#C26C00]/25 dark:border-[#F59E0B]/30",
+    dot: "bg-[#C26C00] dark:bg-[#F59E0B]",
   },
   PENDING_SUBMIT: {
     label: "Submitting...",
-    bg: "bg-indigo-950/40",
-    text: "text-indigo-300",
-    border: "border-indigo-700/50",
-    dot: "bg-indigo-400 animate-pulse",
+    bg: "bg-[#C15F3C]/10 dark:bg-[#D97757]/15",
+    text: "text-[#C15F3C] dark:text-[#D97757]",
+    border: "border-[#C15F3C]/25 dark:border-[#D97757]/30",
+    dot: "bg-[#C15F3C] dark:bg-[#D97757] animate-pulse",
   },
   SUBMITTED: {
     label: "Under Review",
-    bg: "bg-purple-950/40",
-    text: "text-purple-300",
-    border: "border-purple-700/50",
-    dot: "bg-purple-400",
+    bg: "bg-[#B1ADA1]/15 dark:bg-[#B1ADA1]/20",
+    text: "text-[#1A1A18] dark:text-[#F4F3EE]",
+    border: "border-[#B1ADA1]/30 dark:border-[#B1ADA1]/40",
+    dot: "bg-[#B1ADA1]",
   },
   PENDING_APPROVE: {
     label: "Releasing Funds...",
-    bg: "bg-violet-950/40",
-    text: "text-violet-300",
-    border: "border-violet-700/50",
-    dot: "bg-violet-400 animate-pulse",
+    bg: "bg-[#2E7D32]/10 dark:bg-[#4CAF50]/15",
+    text: "text-[#2E7D32] dark:text-[#4CAF50]",
+    border: "border-[#2E7D32]/25 dark:border-[#4CAF50]/30",
+    dot: "bg-[#2E7D32] dark:bg-[#4CAF50] animate-pulse",
   },
   APPROVED: {
     label: "Paid Out",
-    bg: "bg-teal-950/40",
-    text: "text-teal-300",
-    border: "border-teal-700/50",
-    dot: "bg-teal-400",
+    bg: "bg-[#2E7D32]/10 dark:bg-[#4CAF50]/15",
+    text: "text-[#2E7D32] dark:text-[#4CAF50]",
+    border: "border-[#2E7D32]/25 dark:border-[#4CAF50]/30",
+    dot: "bg-[#2E7D32] dark:bg-[#4CAF50]",
   },
   CANCELLED: {
     label: "Cancelled & Refunded",
-    bg: "bg-slate-900/60",
-    text: "text-slate-400",
-    border: "border-slate-800",
-    dot: "bg-slate-500",
+    bg: "bg-[#F4F3EE] dark:bg-[#242422]",
+    text: "text-[#8A857B] dark:text-[#7D7970]",
+    border: "border-[#E8E6DF] dark:border-[#3A3A36]",
+    dot: "bg-[#B1ADA1]",
   },
   FAILED: {
     label: "Failed",
-    bg: "bg-red-950/40",
-    text: "text-red-300",
-    border: "border-red-800/50",
-    dot: "bg-red-500",
+    bg: "bg-[#C15F3C]/10 dark:bg-[#D97757]/15",
+    text: "text-[#C15F3C] dark:text-[#D97757]",
+    border: "border-[#C15F3C]/25 dark:border-[#D97757]/30",
+    dot: "bg-[#C15F3C] dark:bg-[#D97757]",
   },
 };
 
@@ -87,7 +87,7 @@ export function TaskStatusBadge({ status }: { status: TaskStatus }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${config.bg} ${config.text} ${config.border}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${config.bg} ${config.text} ${config.border}`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
       {config.label}

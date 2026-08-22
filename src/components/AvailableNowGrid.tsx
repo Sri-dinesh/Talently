@@ -1,13 +1,13 @@
 /**
- * AvailableNowGrid Component
- * Displays available human providers with live availability toggle and skills
+ * AvailableNowGrid Component - Claude Brand Palette
+ * Displays online human providers with live availability toggle and skills in warm stone/terracotta theme
  */
 
 "use client";
 
 import React, { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
-import { Users, CheckCircle2, ShieldCheck, UserCheck } from "lucide-react";
+import { Users, ShieldCheck, UserCheck, CheckCircle2 } from "lucide-react";
 import type { User } from "@/types/task";
 import { formatAddress } from "@/lib/utils";
 import Link from "next/link";
@@ -74,18 +74,18 @@ export function AvailableNowGrid() {
   }
 
   return (
-    <div className="rounded-3xl bg-slate-900/60 border border-slate-800/80 p-6 backdrop-blur-xl shadow-2xl">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+    <section className="rounded-3xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29] p-6 sm:p-8 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#E8E6DF] dark:border-[#2C2C29]">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-[#C15F3C]/10 dark:bg-[#D97757]/15 flex items-center justify-center text-[#C15F3C] dark:text-[#D97757]">
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              Available Now
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <h2 className="text-base sm:text-lg font-semibold text-[#1A1A18] dark:text-[#F4F3EE] flex items-center gap-2">
+              <span>Available Now</span>
+              <span className="w-2 h-2 rounded-full bg-[#2E7D32] dark:bg-[#4CAF50] animate-pulse" />
             </h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[#8A857B] dark:text-[#7D7970]">
               Verified humans ready to execute micro-tasks on Monad
             </p>
           </div>
@@ -93,19 +93,19 @@ export function AvailableNowGrid() {
 
         {isConnected && (
           <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400">Your Status:</span>
+            <span className="text-xs text-[#8A857B] dark:text-[#7D7970]">Your Status:</span>
             <button
               onClick={handleToggleAvailability}
               disabled={toggling}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-medium flex items-center gap-2 transition-all ${
                 isAvailable
-                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/30"
-                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  ? "bg-[#2E7D32] text-white shadow-xs"
+                  : "bg-[#F4F3EE] dark:bg-[#242422] text-[#1A1A18] dark:text-[#F4F3EE] border border-[#E8E6DF] dark:border-[#3A3A36] hover:bg-[#ECEAE4] dark:hover:bg-[#2C2C29]"
               }`}
             >
               <span
                 className={`w-2 h-2 rounded-full ${
-                  isAvailable ? "bg-white animate-ping" : "bg-slate-500"
+                  isAvailable ? "bg-white animate-ping" : "bg-[#B1ADA1]"
                 }`}
               />
               {isAvailable ? "Available for Tasks" : "Go Online"}
@@ -115,14 +115,14 @@ export function AvailableNowGrid() {
       </div>
 
       {loading && users.length === 0 ? (
-        <div className="py-8 text-center text-xs text-slate-500">
+        <div className="py-10 text-center text-xs text-[#8A857B] dark:text-[#7D7970]">
           Loading online providers...
         </div>
       ) : users.length === 0 ? (
-        <div className="py-8 text-center text-xs text-slate-500 space-y-1">
-          <UserCheck className="w-6 h-6 mx-auto text-slate-600" />
-          <p>No providers currently online.</p>
-          <p className="text-[11px] text-slate-600">
+        <div className="py-10 text-center text-xs text-[#8A857B] dark:text-[#7D7970] space-y-1.5">
+          <UserCheck className="w-6 h-6 mx-auto text-[#B1ADA1]" />
+          <p className="font-medium text-[#1A1A18] dark:text-[#F4F3EE]">No providers currently online</p>
+          <p className="text-[11px] text-[#8A857B] dark:text-[#7D7970]">
             Connect your wallet and click &quot;Go Online&quot; to appear here for tasks.
           </p>
         </div>
@@ -132,21 +132,21 @@ export function AvailableNowGrid() {
             <Link
               key={user.address}
               href={`/profile/${user.address}`}
-              className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 hover:border-emerald-500/40 transition-all group"
+              className="p-4 rounded-2xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#2C2C29] hover:border-[#C15F3C]/40 dark:hover:border-[#D97757]/40 transition-all group"
             >
               <div className="flex items-start justify-between gap-2 mb-2.5">
                 <div>
-                  <div className="font-semibold text-sm text-slate-200 group-hover:text-emerald-300 transition-colors flex items-center gap-1.5">
+                  <div className="font-medium text-sm text-[#1A1A18] dark:text-[#F4F3EE] group-hover:text-[#C15F3C] dark:group-hover:text-[#D97757] transition-colors flex items-center gap-1.5">
                     {user.displayName || formatAddress(user.address)}
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#2E7D32] dark:text-[#4CAF50] shrink-0" />
                   </div>
-                  <div className="text-[11px] text-slate-500 font-mono">
+                  <div className="text-[11px] text-[#8A857B] dark:text-[#7D7970] font-mono">
                     {formatAddress(user.address)}
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 px-2 py-0.5 rounded-md">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#2E7D32] dark:text-[#4CAF50] bg-[#2E7D32]/10 px-2 py-0.5 rounded-md">
                     <CheckCircle2 className="w-3 h-3" />
                     {user.tasksApproved} done
                   </span>
@@ -158,19 +158,19 @@ export function AvailableNowGrid() {
                   user.skills.map((skill) => (
                     <span
                       key={skill}
-                      className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-[10px] text-slate-400"
+                      className="px-2 py-0.5 rounded-md bg-[#F4F3EE] dark:bg-[#242422] text-[10px] text-[#6B665E] dark:text-[#B1ADA1] border border-[#E8E6DF] dark:border-[#3A3A36]"
                     >
                       {skill}
                     </span>
                   ))
                 ) : (
-                  <span className="text-[10px] text-slate-500">General QA</span>
+                  <span className="text-[10px] text-[#8A857B] dark:text-[#7D7970]">General QA</span>
                 )}
               </div>
             </Link>
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }

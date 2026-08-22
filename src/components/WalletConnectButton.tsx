@@ -1,11 +1,12 @@
 /**
- * WalletConnectButton Component
- * Wraps RainbowKit's ConnectButton with custom responsive styling
+ * WalletConnectButton Component - Claude Theme
+ * Styled with warm Crail terracotta accents and Apple-grade precision
  */
 
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { ChevronDown, Wallet } from "lucide-react";
 
 export function WalletConnectButton() {
   return (
@@ -38,8 +39,9 @@ export function WalletConnectButton() {
                   <button
                     onClick={openConnectModal}
                     type="button"
-                    className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 rounded-xl shadow-lg shadow-purple-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#C15F3C] hover:bg-[#A84F30] active:scale-[0.985] rounded-xl shadow-sm transition-all duration-150"
                   >
+                    <Wallet className="w-4 h-4" />
                     Connect Wallet
                   </button>
                 );
@@ -50,9 +52,9 @@ export function WalletConnectButton() {
                   <button
                     onClick={openChainModal}
                     type="button"
-                    className="px-3.5 py-1.5 text-xs font-semibold text-red-200 bg-red-950/80 border border-red-800 rounded-xl hover:bg-red-900 transition-colors"
+                    className="px-3.5 py-1.5 text-xs font-medium text-[#C15F3C] bg-[#C15F3C]/10 border border-[#C15F3C]/30 rounded-xl hover:bg-[#C15F3C]/15 transition-colors"
                   >
-                    Wrong Network (Switch to Monad)
+                    Switch to Monad Testnet
                   </button>
                 );
               }
@@ -62,23 +64,24 @@ export function WalletConnectButton() {
                   <button
                     onClick={openChainModal}
                     type="button"
-                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-900/80 border border-purple-900/40 rounded-xl text-slate-200 hover:bg-slate-800 transition-colors"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#F4F3EE] dark:bg-[#242422] border border-[#E8E6DF] dark:border-[#3A3A36] rounded-xl text-[#1A1A18] dark:text-[#F4F3EE] hover:border-[#B1ADA1] transition-colors"
                   >
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="w-2 h-2 rounded-full bg-[#2E7D32] dark:bg-[#4CAF50] animate-pulse" />
                     {chain.name}
                   </button>
 
                   <button
                     onClick={openAccountModal}
                     type="button"
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold bg-purple-950/60 border border-purple-800/50 rounded-xl text-purple-200 hover:bg-purple-900/60 transition-colors"
+                    className="flex items-center gap-2 px-3.5 py-1.5 text-xs font-medium bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#3A3A36] rounded-xl text-[#1A1A18] dark:text-[#F4F3EE] hover:border-[#C15F3C]/50 transition-all shadow-xs"
                   >
-                    <span>{account.displayName}</span>
+                    <span className="font-mono text-xs font-semibold">{account.displayName}</span>
                     {account.displayBalance ? (
-                      <span className="text-purple-400 font-normal">
-                        ({account.displayBalance})
+                      <span className="text-[#C15F3C] dark:text-[#D97757] font-medium">
+                        {account.displayBalance}
                       </span>
                     ) : null}
+                    <ChevronDown className="w-3.5 h-3.5 text-[#B1ADA1]" />
                   </button>
                 </div>
               );
