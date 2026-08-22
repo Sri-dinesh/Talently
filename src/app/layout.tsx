@@ -65,8 +65,15 @@ export default function RootLayout({
                   className="flex items-center gap-1.5 text-sm font-medium text-[#6B665E] dark:text-[#B1ADA1] hover:text-[#1A1A18] dark:hover:text-[#F4F3EE] px-3 py-1.5 rounded-lg hover:bg-[#F4F3EE] dark:hover:bg-[#1E1E1C] transition-all"
                 >
                   <Users className="w-4 h-4 text-[#C15F3C]" />
-                  <span className="hidden sm:inline">Swarm</span>
-                  <span className="sm:hidden">Swarm</span>
+                  <span>Swarm</span>
+                </Link>
+                <Link
+                  href="/spin"
+                  className="flex items-center gap-1.5 text-sm font-medium text-[#6B665E] dark:text-[#B1ADA1] hover:text-[#1A1A18] dark:hover:text-[#F4F3EE] px-3 py-1.5 rounded-lg hover:bg-[#F4F3EE] dark:hover:bg-[#1E1E1C] transition-all"
+                >
+                  <Sparkles className="w-4 h-4 text-[#836EF9]" />
+                  <span className="hidden sm:inline">Roulette</span>
+                  <span className="sm:hidden">Spin</span>
                 </Link>
                 <div className="pl-2 border-l border-[#E8E6DF] dark:border-[#2C2C29]">
                   <WalletConnectButton />
