@@ -44,9 +44,9 @@ export default async function HomePage() {
             <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight text-[#1A1A18] dark:text-[#F4F3EE] leading-[1.12]">
               Software has APIs for machines. <br />
               <span className="editorial-serif text-[#C15F3C] dark:text-[#D97757] font-normal">
-                Human API
+                Talently
               </span>{" "}
-              is the API for humans.
+              is the protocol for humans.
             </h1>
 
             <p className="text-base sm:text-lg text-[#5C5851] dark:text-[#B1ADA1] leading-relaxed max-w-xl font-normal">
@@ -246,7 +246,7 @@ export default async function HomePage() {
       <section className="rounded-3xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29] p-8 sm:p-12 shadow-sm">
         <div className="text-center max-w-lg mx-auto mb-10 space-y-1.5">
           <h2 className="text-xl font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">
-            How Human API Works
+            How Talently Works
           </h2>
           <p className="text-xs text-[#8A857B] dark:text-[#7D7970]">
             A trustless 3-step escrow loop verified on Monad smart contracts.

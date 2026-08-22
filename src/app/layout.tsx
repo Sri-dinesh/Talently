@@ -9,11 +9,25 @@ import "@rainbow-me/rainbowkit/styles.css";
 import { Providers } from "./providers";
 import Link from "next/link";
 import { WalletConnectButton } from "@/components/WalletConnectButton";
-import { Compass, PlusCircle, Sparkles, Users } from "lucide-react";
+import { Compass, PlusCircle, Sparkles, Users, Flame } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Human API · On-Chain Micro-Task Marketplace on Monad",
-  description: "Software calls machine APIs. Human API connects machine protocols to human capabilities on Monad.",
+  metadataBase: new URL("https://talentlyoffi.vercel.app"),
+  title: "Talently · On-Chain Human Capability & Intelligence Protocol on Monad",
+  description: "Talently connects machine protocols, AI agents, and decentralized applications to real-time human intelligence, swarms, and social coordination on Monad.",
+  openGraph: {
+    title: "Talently · On-Chain Human Capability & Intelligence Protocol on Monad",
+    description: "Connect machine protocols and autonomous AI agents to real-time human capability, swarm intelligence, and social coordination on Monad.",
+    url: "https://talentlyoffi.vercel.app",
+    siteName: "Talently",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Talently · On-Chain Human Capability Protocol on Monad",
+    description: "Decentralized execution layer connecting AI agents to human swarms on Monad.",
+  },
 };
 
 export default function RootLayout({
@@ -31,11 +45,11 @@ export default function RootLayout({
               {/* Brand Logo */}
               <Link href="/" className="flex items-center gap-3 group">
                 <div className="w-8 h-8 rounded-lg bg-[#C15F3C] flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
-                  <span className="font-serif font-bold text-white text-base">H</span>
+                  <span className="font-serif font-bold text-white text-base">T</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-base tracking-tight text-[#1A1A18] dark:text-[#F4F3EE]">
-                    Human API
+                    Talently
                   </span>
                   <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#F4F3EE] dark:bg-[#242422] text-[#6B665E] dark:text-[#B1ADA1] border border-[#E8E6DF] dark:border-[#3A3A36]">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#C15F3C] animate-pulse" />
@@ -75,6 +89,17 @@ export default function RootLayout({
                   <span className="hidden sm:inline">Roulette</span>
                   <span className="sm:hidden">Spin</span>
                 </Link>
+                <Link
+                  href="/floor"
+                  className="flex items-center gap-1.5 text-sm font-medium text-[#6B665E] dark:text-[#B1ADA1] hover:text-[#1A1A18] dark:hover:text-[#F4F3EE] px-3 py-1.5 rounded-lg hover:bg-[#F4F3EE] dark:hover:bg-[#1E1E1C] transition-all"
+                >
+                  <Flame className="w-4 h-4 text-[#C15F3C] animate-pulse" />
+                  <span className="hidden sm:inline">The Floor</span>
+                  <span className="sm:hidden">Floor</span>
+                  <span className="hidden lg:inline-flex text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-[#C15F3C]/20 text-[#C15F3C] border border-[#C15F3C]/30 ml-0.5">
+                    NEW
+                  </span>
+                </Link>
                 <div className="pl-2 border-l border-[#E8E6DF] dark:border-[#2C2C29]">
                   <WalletConnectButton />
                 </div>
@@ -94,7 +119,7 @@ export default function RootLayout({
                 <div className="w-4 h-4 rounded-full bg-[#C15F3C]/10 flex items-center justify-center">
                   <Sparkles className="w-2.5 h-2.5 text-[#C15F3C]" />
                 </div>
-                <p>Human API · Real-Time Human Capability Marketplace on Monad</p>
+                <p>Talently · Real-Time Human Capability Protocol on Monad</p>
               </div>
               <div className="flex items-center gap-3">
                 <span>Monad Testnet (10143)</span>

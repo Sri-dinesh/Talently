@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Create a live bounty task in memory store so worker can immediately accept & execute it!
-    const requester = "0xf1d0e196fdf6309d335f69d5251ff91d399fcbb3";
+    const requester = workerAddress || "0x0000000000000000000000000000000000000000";
     const created = await db.createTask({
       title: targetSegment.sampleTitle,
       description: targetSegment.sampleDescription,

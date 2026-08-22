@@ -14,7 +14,7 @@ const connectors = connectorsForWallets(
     },
   ],
   {
-    appName: "Human API",
+    appName: "Talently",
     projectId: "00000000000000000000000000000000",
   }
 );

@@ -135,9 +135,9 @@ export default function JoinTaskPage({
       <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29] shadow-xs">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-[#C15F3C] flex items-center justify-center text-white font-serif font-bold text-xs">
-            H
+            T
           </div>
-          <span className="font-semibold text-xs text-[#1A1A18] dark:text-[#F4F3EE]">Human API Mobile</span>
+          <span className="font-semibold text-xs text-[#1A1A18] dark:text-[#F4F3EE]">Talently Mobile</span>
         </div>
         <TaskStatusBadge status={task.status} />
       </div>

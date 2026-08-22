@@ -143,7 +143,7 @@ export async function evaluateAiQuality(
     };
   }
 
-  const systemPrompt = `You are the Human API Task Verification Oracle.
+  const systemPrompt = `You are the Talently Task Verification Oracle.
 Evaluate whether a human worker's submission satisfies the requester's requirements and quality standards.
 Return ONLY valid JSON matching this schema:
 {

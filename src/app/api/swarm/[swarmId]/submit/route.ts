@@ -63,7 +63,7 @@ export async function POST(
       submittedAt,
     };
 
-    let scorecard;
+    let scorecard: import("@/types/verification").VerificationScorecard;
     try {
       scorecard = await verifySubmission(taskLike, {
         resultText,
@@ -75,10 +75,18 @@ export async function POST(
     } catch (err) {
       console.error("AI Verification Failed, falling back to manual review:", err);
       scorecard = {
-        verdict: "MANUAL_REVIEW" as const,
-        reason: "AI verification engine unavailable. Requires manual review.",
-        confidence: 0,
-        criteriaScores: {},
+        verdict: "REVIEW",
+        compositeScore: 50,
+        requirementsScore: 50,
+        requirementsMet: 1,
+        requirementsTotal: 1,
+        evidenceScore: 50,
+        qualityScore: 50,
+        anomalyFlags: ["AI_OFFLINE"],
+        completionTimeSeconds: 30,
+        explanation: "AI verification engine unavailable. Requires manual review.",
+        criteriaBreakdown: [],
+        evaluatedAt: new Date().toISOString(),
       };
     }
 
