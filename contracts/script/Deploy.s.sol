@@ -6,15 +6,12 @@ import {HumanTaskEscrow} from "../src/HumanTaskEscrow.sol";
 
 contract DeployScript is Script {
     function run() external returns (HumanTaskEscrow) {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerPrivateKey);
-
-        vm.startBroadcast(deployerPrivateKey);
-        HumanTaskEscrow escrow = new HumanTaskEscrow(deployer);
+        vm.startBroadcast();
+        HumanTaskEscrow escrow = new HumanTaskEscrow(msg.sender);
         vm.stopBroadcast();
 
         console.log("HumanTaskEscrow deployed at:", address(escrow));
-        console.log("Owner set to:", deployer);
+        console.log("Owner set to:", msg.sender);
         return escrow;
     }
 }
