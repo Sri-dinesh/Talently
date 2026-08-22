@@ -63,13 +63,24 @@ export async function POST(
       submittedAt,
     };
 
-    const scorecard = await verifySubmission(taskLike, {
-      resultText,
-      resultSeverity: resultSeverity || null,
-      resultAttachmentUrl: resultAttachmentUrl || null,
-      acceptedAt: submission.acceptedAt,
-      submittedAt,
-    });
+    let scorecard;
+    try {
+      scorecard = await verifySubmission(taskLike, {
+        resultText,
+        resultSeverity: resultSeverity || null,
+        resultAttachmentUrl: resultAttachmentUrl || null,
+        acceptedAt: submission.acceptedAt,
+        submittedAt,
+      });
+    } catch (err) {
+      console.error("AI Verification Failed, falling back to manual review:", err);
+      scorecard = {
+        verdict: "MANUAL_REVIEW" as const,
+        reason: "AI verification engine unavailable. Requires manual review.",
+        confidence: 0,
+        criteriaScores: {},
+      };
+    }
 
     const newStatus =
       scorecard.verdict === "PASS" ? "VERIFIED"
