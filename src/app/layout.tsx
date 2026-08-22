@@ -1,6 +1,6 @@
 /**
- * Root Layout for Human API
- * Wraps application with Wagmi, RainbowKit, and React Query Providers
+ * Root Layout for Human API - Claude Brand Palette
+ * Crafted with Crail (#C15F3C), Pampas (#F4F3EE), Cloudy (#B1ADA1), and Pure White (#FFFFFF)
  */
 
 import type { Metadata } from "next";
@@ -9,11 +9,11 @@ import "@rainbow-me/rainbowkit/styles.css";
 import { Providers } from "./providers";
 import Link from "next/link";
 import { WalletConnectButton } from "@/components/WalletConnectButton";
-import { Zap, PlusCircle, Compass } from "lucide-react";
+import { Compass, PlusCircle, Sparkles } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Human API | On-Chain Micro-Task Marketplace on Monad",
-  description: "Software has APIs for machine capabilities. Human API is an API for human capabilities.",
+  title: "Human API · On-Chain Micro-Task Marketplace on Monad",
+  description: "Software calls machine APIs. Human API connects machine protocols to human capabilities on Monad.",
 };
 
 export default function RootLayout({
@@ -23,55 +23,71 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-[#070913] text-slate-100 min-h-screen flex flex-col selection:bg-purple-600/40">
+      <body className="bg-[#FBFBF9] dark:bg-[#141413] text-[#1A1A18] dark:text-[#F4F3EE] min-h-screen flex flex-col selection:bg-[#C15F3C]/20 selection:text-[#C15F3C]">
         <Providers>
-          <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#070913]/80 border-b border-purple-900/30">
+          {/* Header */}
+          <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#FBFBF9]/85 dark:bg-[#141413]/85 border-b border-[#E8E6DF] dark:border-[#2C2C29] transition-colors">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-              <Link href="/" className="flex items-center gap-2.5 group">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-purple-600/30 group-hover:scale-105 transition-transform">
-                  <Zap className="w-5 h-5 text-white" />
+              {/* Brand Logo */}
+              <Link href="/" className="flex items-center gap-3 group">
+                <div className="w-8 h-8 rounded-lg bg-[#C15F3C] flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+                  <span className="font-serif font-bold text-white text-base">H</span>
                 </div>
-                <div>
-                  <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-purple-100 to-purple-300 bg-clip-text text-transparent">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-base tracking-tight text-[#1A1A18] dark:text-[#F4F3EE]">
                     Human API
                   </span>
-                  <span className="ml-1.5 text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#F4F3EE] dark:bg-[#242422] text-[#6B665E] dark:text-[#B1ADA1] border border-[#E8E6DF] dark:border-[#3A3A36]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#C15F3C] animate-pulse" />
                     Monad
                   </span>
                 </div>
               </Link>
 
-              <nav className="flex items-center gap-4">
+              {/* Navigation */}
+              <nav className="flex items-center gap-2 sm:gap-4">
                 <Link
                   href="/tasks"
-                  className="flex items-center gap-1.5 text-sm font-medium text-slate-300 hover:text-white px-3 py-1.5 rounded-lg hover:bg-slate-800/60 transition-colors"
+                  className="flex items-center gap-1.5 text-sm font-medium text-[#6B665E] dark:text-[#B1ADA1] hover:text-[#1A1A18] dark:hover:text-[#F4F3EE] px-3 py-1.5 rounded-lg hover:bg-[#F4F3EE] dark:hover:bg-[#1E1E1C] transition-all"
                 >
-                  <Compass className="w-4 h-4 text-purple-400" />
-                  Explore Tasks
+                  <Compass className="w-4 h-4 text-[#C15F3C]" />
+                  <span>Explore</span>
                 </Link>
                 <Link
                   href="/tasks/new"
-                  className="flex items-center gap-1.5 text-sm font-medium text-slate-300 hover:text-white px-3 py-1.5 rounded-lg hover:bg-slate-800/60 transition-colors"
+                  className="flex items-center gap-1.5 text-sm font-medium text-[#6B665E] dark:text-[#B1ADA1] hover:text-[#1A1A18] dark:hover:text-[#F4F3EE] px-3 py-1.5 rounded-lg hover:bg-[#F4F3EE] dark:hover:bg-[#1E1E1C] transition-all"
                 >
-                  <PlusCircle className="w-4 h-4 text-indigo-400" />
-                  Post Task
+                  <PlusCircle className="w-4 h-4 text-[#C15F3C]" />
+                  <span>Post Task</span>
                 </Link>
-                <WalletConnectButton />
+                <div className="pl-2 border-l border-[#E8E6DF] dark:border-[#2C2C29]">
+                  <WalletConnectButton />
+                </div>
               </nav>
             </div>
           </header>
 
-          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Main Content */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
             {children}
           </main>
 
-          <footer className="border-t border-slate-800/60 bg-[#05070e] py-8 text-center text-xs text-slate-500">
-            <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p>Human API — Monad Blitz Hyderabad V3 · Real-time Human Micro-task Marketplace</p>
-              <div className="flex items-center gap-4 text-slate-400">
-                <span>Monad Testnet (Chain ID 10143)</span>
+          {/* Minimalist Footer */}
+          <footer className="border-t border-[#E8E6DF] dark:border-[#2C2C29] bg-[#FBFBF9] dark:bg-[#141413] py-8 text-xs text-[#8A857B] dark:text-[#7D7970] transition-colors">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-[#C15F3C]/10 flex items-center justify-center">
+                  <Sparkles className="w-2.5 h-2.5 text-[#C15F3C]" />
+                </div>
+                <p>Human API · Real-Time Human Capability Marketplace on Monad</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span>Monad Testnet (10143)</span>
                 <span>•</span>
-                <span>Escrow Verified On-Chain</span>
+                <span className="text-[#2E7D32] dark:text-[#4CAF50] font-medium flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-current inline-block" />
+                  Escrow Verified
+                </span>
               </div>
             </div>
           </footer>

@@ -11,6 +11,7 @@ contracts/lib/openzeppelin-contracts/node_modules/
 out/
 build/
 dist/
+.data/
 
 # Environment variables
 .env
