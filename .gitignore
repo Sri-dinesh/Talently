@@ -2,8 +2,9 @@
 PLAN.md
 
 # Dependencies
-node_modules
-contracts/lib/openzeppelin-contracts/node_modules
+node_modules/
+contracts/lib/
+contracts/lib/openzeppelin-contracts/node_modules/
 
 # Next.js build output
 .next/
@@ -32,7 +33,6 @@ yarn-error.log*
 *.pem
 .vscode/
 .idea/
-
 
 .skills/
 .agents/
