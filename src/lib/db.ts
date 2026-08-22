@@ -113,6 +113,124 @@ function loadFromDisk(force = false): void {
   } catch {
     // ignore
   }
+
+  // Seed default active items if store is empty (e.g. on fresh Vercel serverless deployment)
+  if (memorySwarmTasks.size === 0) {
+    const defaultSwarms: SwarmTask[] = [
+      {
+        id: "swarm_dex_swap_audit",
+        title: "Test Monad DEX swap & liquidity flow across devices",
+        description: "Connect wallet, execute a test token swap on Monad testnet, attempt to add liquidity, and document any UI glitches, transaction timeouts, or failed states across your specific browser/device.",
+        category: "Testing",
+        skills: ["DEX", "QA", "Mobile/Desktop"],
+        requirements: [
+          "Submit device and browser model",
+          "Execute token swap on Monad Testnet",
+          "Document transaction hash or confirmation latency",
+          "Report UI responsiveness or glitches"
+        ],
+        rewardWeiPerWorker: "10000000000000000",
+        estimatedMinutes: 5,
+        maxWorkers: 3,
+        status: "OPEN",
+        requesterAddress: "0xaecc9f6cdd4ceed0b04588e026b7049f219d3779",
+        clusterReport: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "swarm_nft_mint_stress",
+        title: "Audit high-throughput NFT mint load on Monad Testnet",
+        description: "Participate in parallel load testing for Monad NFT contract. Mint test assets simultaneously with other nodes and measure block inclusion times.",
+        category: "Technical",
+        skills: ["NFT", "Stress Testing", "EVM"],
+        requirements: [
+          "Mint test NFT via contract call",
+          "Record gas consumed vs estimated gas limit",
+          "Verify asset appearance on block explorer"
+        ],
+        rewardWeiPerWorker: "20000000000000000",
+        estimatedMinutes: 8,
+        maxWorkers: 4,
+        status: "OPEN",
+        requesterAddress: "0xaecc9f6cdd4ceed0b04588e026b7049f219d3779",
+        clusterReport: null,
+        createdAt: new Date(Date.now() - 3600000).toISOString(),
+        updatedAt: new Date(Date.now() - 3600000).toISOString(),
+      }
+    ];
+    for (const s of defaultSwarms) {
+      memorySwarmTasks.set(s.id, s);
+    }
+  }
+
+  if (memoryTasks.size === 0) {
+    const defaultTasks: Task[] = [
+      {
+        id: "task_mobile_onboarding",
+        onChainId: "1",
+        title: "Mobile Onboarding UI & Gas UX Audit on Monad",
+        description: "Test mobile phone connection flow, QR scan latency, and gas estimation dialog clarity on Monad Testnet.",
+        category: "Testing",
+        skills: ["Mobile", "UX Audit", "Monad"],
+        requirements: [
+          "Scan QR join link on mobile device",
+          "Sign test authentication on Monad",
+          "Provide feedback on transaction speed and clarity"
+        ],
+        rewardWei: "10000000000000000",
+        estimatedMinutes: 5,
+        status: "OPEN",
+        requesterAddress: "0xaecc9f6cdd4ceed0b04588e026b7049f219d3779",
+        providerAddress: null,
+        resultText: null,
+        resultSeverity: null,
+        resultAttachmentUrl: null,
+        verificationScorecard: null,
+        createTxHash: "0x3a9b1c7d8e2f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b",
+        acceptTxHash: null,
+        submitTxHash: null,
+        approveTxHash: null,
+        acceptedAt: null,
+        submittedAt: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "task_smart_contract_fuzz",
+        onChainId: "2",
+        title: "Fuzz Test Escrow Contract Reentrancy on Monad",
+        description: "Audit HumanTaskEscrow.sol on Monad Testnet, check state changes, and verify reentrancy protection under high load.",
+        category: "Technical",
+        skills: ["Solidity", "Security", "Auditing"],
+        requirements: [
+          "Review contract bytecode on explorer",
+          "Verify nonReentrant modifier execution",
+          "Document test execution outcome"
+        ],
+        rewardWei: "25000000000000000",
+        estimatedMinutes: 10,
+        status: "OPEN",
+        requesterAddress: "0xaecc9f6cdd4ceed0b04588e026b7049f219d3779",
+        providerAddress: null,
+        resultText: null,
+        resultSeverity: null,
+        resultAttachmentUrl: null,
+        verificationScorecard: null,
+        createTxHash: "0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b",
+        acceptTxHash: null,
+        submitTxHash: null,
+        approveTxHash: null,
+        acceptedAt: null,
+        submittedAt: null,
+        createdAt: new Date(Date.now() - 7200000).toISOString(),
+        updatedAt: new Date(Date.now() - 7200000).toISOString(),
+      }
+    ];
+    for (const t of defaultTasks) {
+      memoryTasks.set(t.id, t);
+    }
+  }
 }
 
 let saveTimer: NodeJS.Timeout | null = null;
