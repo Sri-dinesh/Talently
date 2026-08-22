@@ -12,15 +12,22 @@ export async function classifyTask(description: string): Promise<ClassifyResult 
     return null;
   }
 
+  const baseUrl =
+    process.env.OPENCODE_ZEN_BASE_URL ||
+    "https://api.opencode.ai/v1/chat/completions";
+
+  const model =
+    process.env.OPENCODE_ZEN_MODEL || "deepseek-v4-flash-free";
+
   try {
-    const res = await fetch("https://api.opencode.zen/v1/chat/completions", {
+    const res = await fetch(baseUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: process.env.OPENCODE_ZEN_MODEL || "meta-llama/llama-3.1-8b-instruct",
+        model,
         messages: [
           {
             role: "system",
