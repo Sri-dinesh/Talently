@@ -8,43 +8,48 @@ import { SwarmTaskCard } from "@/components/SwarmTaskCard";
 import type { SwarmTask } from "@/types/swarm";
 
 const STATUS_FILTERS = [
+  { label: "Active", value: "ACTIVE" },
   { label: "All", value: "ALL" },
   { label: "Open", value: "OPEN" },
   { label: "In Progress", value: "IN_PROGRESS" },
-  { label: "Completed / Paid Out", value: "COMPLETED" },
+  { label: "Completed", value: "COMPLETED" },
 ];
 
 export default function SwarmPage() {
   const [tasks, setTasks] = useState<SwarmTask[]>([]);
   const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
-  const [selectedStatus, setSelectedStatus] = useState("ALL");
+  const [selectedStatus, setSelectedStatus] = useState("ACTIVE");
   const [loading, setLoading] = useState(true);
 
   async function fetchTasks() {
     setLoading(true);
     try {
-      const res = await fetch("/api/swarm");
+      const res = await fetch("/api/swarm", { cache: "no-store" });
       const json = await res.json();
       if (json.data) {
         setTasks(json.data);
         const counts: Record<string, number> = {};
-        await Promise.all(
-          json.data.map(async (t: SwarmTask) => {
-            try {
-              const r = await fetch("/api/swarm/" + t.id);
-              const j = await r.json();
-              counts[t.id] = j.data?.submissions?.length || 0;
-            } catch { counts[t.id] = 0; }
-          })
-        );
+        for (const t of json.data) {
+          counts[t.id] = (t as any).participantCount || 0;
+        }
         setParticipantCounts(counts);
       }
-    } catch {} finally { setLoading(false); }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
   }
 
-  useEffect(() => { fetchTasks(); }, []);
+  useEffect(() => { 
+    fetchTasks(); 
+  }, []);
 
-  const filtered = tasks.filter((t) => selectedStatus === "ALL" ? true : t.status === selectedStatus);
+  const filtered = tasks.filter((t) => {
+    if (selectedStatus === "ALL") return true;
+    if (selectedStatus === "ACTIVE") return t.status === "OPEN" || t.status === "IN_PROGRESS";
+    return t.status === selectedStatus;
+  });
 
   return (
     <div className="space-y-8 py-2">

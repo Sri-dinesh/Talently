@@ -41,8 +41,13 @@ globalForMemory.memorySwarmTasks = memorySwarmTasks;
 globalForMemory.memorySwarmSubmissions = memorySwarmSubmissions;
 globalForMemory.memoryFloorGames = memoryFloorGames;
 
+let hasLoadedFromDisk = false;
+
 // Hydrate from persistent disk store on startup
-function loadFromDisk(): void {
+function loadFromDisk(force = false): void {
+  if (hasLoadedFromDisk && !force) return;
+  hasLoadedFromDisk = true;
+
   try {
     if (fs.existsSync(TASKS_FILE)) {
       const raw = fs.readFileSync(TASKS_FILE, "utf-8");
@@ -110,8 +115,23 @@ function loadFromDisk(): void {
   }
 }
 
-// Persist memory store to disk
-function saveToDisk(): void {
+let saveTimer: NodeJS.Timeout | null = null;
+
+// Persist memory store to disk (non-blocking debounce)
+function saveToDisk(immediate = false): void {
+  if (immediate) {
+    doSave();
+    return;
+  }
+  if (!saveTimer) {
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      doSave();
+    }, 40);
+  }
+}
+
+function doSave(): void {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -147,7 +167,7 @@ function saveToDisk(): void {
 }
 
 // Initial hydration
-loadFromDisk();
+loadFromDisk(true);
 
 export function isDbConfigured(): boolean {
   if (globalForMemory.dbDisabled) return false;

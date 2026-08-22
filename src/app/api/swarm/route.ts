@@ -20,7 +20,24 @@ export async function GET(req: NextRequest) {
       limit,
     });
 
-    return NextResponse.json({ data: tasks });
+    const tasksWithCounts = await Promise.all(
+      tasks.map(async (t) => {
+        const subs = await db.getSwarmSubmissions(t.id);
+        return {
+          ...t,
+          participantCount: subs.length,
+        };
+      })
+    );
+
+    return NextResponse.json(
+      { data: tasksWithCounts },
+      {
+        headers: {
+          "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        },
+      }
+    );
   } catch (error) {
     console.error("GET /api/swarm error:", error);
     return NextResponse.json({ error: { code: "SERVER_ERROR", message: "Failed to fetch swarm tasks" } }, { status: 500 });

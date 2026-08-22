@@ -43,7 +43,7 @@ export default function TasksPage() {
   async function fetchTasks() {
     try {
       setLoading(true);
-      const res = await fetch("/api/tasks");
+      const res = await fetch("/api/tasks", { cache: "no-store" });
       const json = await res.json();
       if (json.data) {
         setInitialTasks(json.data);
