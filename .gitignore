@@ -1,0 +1,39 @@
+# Local documentation / specs
+PLAN.md
+
+# Dependencies
+node_modules
+contracts/lib/openzeppelin-contracts/node_modules
+
+# Next.js build output
+.next/
+out/
+build/
+dist/
+
+# Environment variables
+.env
+.env*.local
+.env.local
+contracts/.env
+
+# Foundry build output
+contracts/out/
+contracts/cache/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / Editor files
+.DS_Store
+*.pem
+.vscode/
+.idea/
+
+
+.skills/
+.agents/
+.claude/
