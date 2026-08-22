@@ -3,15 +3,20 @@ import fs from "fs";
 import path from "path";
 import { prisma } from "./prisma";
 import type { Task, User, TaskStatus } from "@/types/task";
+import type { SwarmTask, SwarmSubmission, SwarmStatus, SwarmSubmissionStatus } from "@/types/swarm";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const TASKS_FILE = path.join(DATA_DIR, "tasks.json");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
+const SWARM_TASKS_FILE = path.join(DATA_DIR, "swarm_tasks.json");
+const SWARM_SUBMISSIONS_FILE = path.join(DATA_DIR, "swarm_submissions.json");
 
 // Global in-memory store shared across all Next.js server route closures
 const globalForMemory = globalThis as unknown as {
   memoryTasks: Map<string, Task> | undefined;
   memoryUsers: Map<string, User> | undefined;
+  memorySwarmTasks: Map<string, SwarmTask> | undefined;
+  memorySwarmSubmissions: Map<string, SwarmSubmission> | undefined;
   dbDisabled: boolean | undefined;
 };
 
@@ -19,9 +24,15 @@ const memoryTasks: Map<string, Task> =
   globalForMemory.memoryTasks ?? new Map<string, Task>();
 const memoryUsers: Map<string, User> =
   globalForMemory.memoryUsers ?? new Map<string, User>();
+const memorySwarmTasks: Map<string, SwarmTask> =
+  globalForMemory.memorySwarmTasks ?? new Map<string, SwarmTask>();
+const memorySwarmSubmissions: Map<string, SwarmSubmission> =
+  globalForMemory.memorySwarmSubmissions ?? new Map<string, SwarmSubmission>();
 
 globalForMemory.memoryTasks = memoryTasks;
 globalForMemory.memoryUsers = memoryUsers;
+globalForMemory.memorySwarmTasks = memorySwarmTasks;
+globalForMemory.memorySwarmSubmissions = memorySwarmSubmissions;
 
 // Hydrate from persistent disk store on startup
 function loadFromDisk(): void {
@@ -51,6 +62,32 @@ function loadFromDisk(): void {
   } catch {
     // ignore
   }
+
+  try {
+    if (fs.existsSync(SWARM_TASKS_FILE)) {
+      const raw = fs.readFileSync(SWARM_TASKS_FILE, "utf-8");
+      const swarmTasks: SwarmTask[] = JSON.parse(raw);
+      memorySwarmTasks.clear();
+      for (const st of swarmTasks) {
+        memorySwarmTasks.set(st.id, st);
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    if (fs.existsSync(SWARM_SUBMISSIONS_FILE)) {
+      const raw = fs.readFileSync(SWARM_SUBMISSIONS_FILE, "utf-8");
+      const subs: SwarmSubmission[] = JSON.parse(raw);
+      memorySwarmSubmissions.clear();
+      for (const s of subs) {
+        memorySwarmSubmissions.set(s.id, s);
+      }
+    }
+  } catch {
+    // ignore
+  }
 }
 
 // Persist memory store to disk
@@ -67,6 +104,16 @@ function saveToDisk(): void {
     fs.writeFileSync(
       USERS_FILE,
       JSON.stringify(Array.from(memoryUsers.values()), null, 2),
+      "utf-8"
+    );
+    fs.writeFileSync(
+      SWARM_TASKS_FILE,
+      JSON.stringify(Array.from(memorySwarmTasks.values()), null, 2),
+      "utf-8"
+    );
+    fs.writeFileSync(
+      SWARM_SUBMISSIONS_FILE,
+      JSON.stringify(Array.from(memorySwarmSubmissions.values()), null, 2),
       "utf-8"
     );
   } catch {
@@ -625,4 +672,165 @@ export const db = {
     const users = Array.from(memoryUsers.values()).filter((u) => u.isAvailable);
     return users.sort((a, b) => b.tasksApproved - a.tasksApproved);
   },
+
+  // =========================================================================
+  // SWARM TASK CRUD
+  // =========================================================================
+
+  async createSwarmTask(data: {
+    title: string;
+    description: string;
+    category?: string;
+    skills?: string[];
+    requirements?: string[];
+    rewardWeiPerWorker: string;
+    estimatedMinutes?: number | null;
+    maxWorkers: number;
+    requesterAddress: string;
+  }): Promise<SwarmTask> {
+    loadFromDisk();
+    const id = `swarm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const swarmTask: SwarmTask = {
+      id,
+      title: data.title,
+      description: data.description,
+      category: data.category || "Testing",
+      skills: data.skills || [],
+      requirements: data.requirements || [],
+      rewardWeiPerWorker: data.rewardWeiPerWorker,
+      estimatedMinutes: data.estimatedMinutes || null,
+      maxWorkers: data.maxWorkers,
+      status: "OPEN",
+      requesterAddress: data.requesterAddress.toLowerCase(),
+      clusterReport: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    memorySwarmTasks.set(id, swarmTask);
+    saveToDisk();
+    return swarmTask;
+  },
+
+  async getSwarmTask(id: string): Promise<SwarmTask | null> {
+    loadFromDisk();
+    return memorySwarmTasks.get(id) || null;
+  },
+
+  async getSwarmTasks(filters?: {
+    status?: SwarmStatus;
+    requesterAddress?: string;
+    limit?: number;
+  }): Promise<SwarmTask[]> {
+    loadFromDisk();
+    let tasks = Array.from(memorySwarmTasks.values());
+    if (filters?.status) tasks = tasks.filter((t) => t.status === filters.status);
+    if (filters?.requesterAddress) {
+      tasks = tasks.filter(
+        (t) => t.requesterAddress === filters.requesterAddress!.toLowerCase()
+      );
+    }
+    tasks.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    return tasks.slice(0, filters?.limit || 50);
+  },
+
+  async updateSwarmTask(
+    id: string,
+    data: Partial<{
+      status: SwarmStatus;
+      clusterReport: SwarmTask["clusterReport"];
+      refundedWei: string;
+    }>
+  ): Promise<SwarmTask> {
+    loadFromDisk();
+    const existing = memorySwarmTasks.get(id);
+    if (!existing) throw new Error(`SwarmTask ${id} not found`);
+    const updated: SwarmTask = {
+      ...existing,
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+    memorySwarmTasks.set(id, updated);
+    saveToDisk();
+    return updated;
+  },
+
+  // =========================================================================
+  // SWARM SUBMISSION CRUD
+  // =========================================================================
+
+  async createSwarmSubmission(data: {
+    swarmId: string;
+    workerAddress: string;
+  }): Promise<SwarmSubmission> {
+    loadFromDisk();
+    const id = `ssub_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const submission: SwarmSubmission = {
+      id,
+      swarmId: data.swarmId,
+      workerAddress: data.workerAddress.toLowerCase(),
+      status: "EXECUTING",
+      resultText: null,
+      resultSeverity: null,
+      resultAttachmentUrl: null,
+      verificationScorecard: null,
+      acceptedAt: new Date().toISOString(),
+      submittedAt: null,
+      payoutTxHash: null,
+      refundTxHash: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    memorySwarmSubmissions.set(id, submission);
+    saveToDisk();
+    return submission;
+  },
+
+  async getSwarmSubmissions(swarmId: string): Promise<SwarmSubmission[]> {
+    loadFromDisk();
+    return Array.from(memorySwarmSubmissions.values()).filter(
+      (s) => s.swarmId === swarmId
+    );
+  },
+
+  async getSwarmSubmissionByWorker(
+    swarmId: string,
+    workerAddress: string
+  ): Promise<SwarmSubmission | null> {
+    loadFromDisk();
+    const normalized = workerAddress.toLowerCase();
+    return (
+      Array.from(memorySwarmSubmissions.values()).find(
+        (s) => s.swarmId === swarmId && s.workerAddress === normalized
+      ) || null
+    );
+  },
+
+  async updateSwarmSubmission(
+    id: string,
+    data: Partial<{
+      status: SwarmSubmissionStatus;
+      resultText: string | null;
+      resultSeverity: string | null;
+      resultAttachmentUrl: string | null;
+      verificationScorecard: SwarmSubmission["verificationScorecard"];
+      submittedAt: string | null;
+      payoutTxHash: string | null;
+      refundTxHash: string | null;
+    }>
+  ): Promise<SwarmSubmission> {
+    loadFromDisk();
+    const existing = memorySwarmSubmissions.get(id);
+    if (!existing) throw new Error(`SwarmSubmission ${id} not found`);
+    const updated: SwarmSubmission = {
+      ...existing,
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+    memorySwarmSubmissions.set(id, updated);
+    saveToDisk();
+    return updated;
+  },
 };
+

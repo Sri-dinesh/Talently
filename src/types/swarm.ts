@@ -12,7 +12,9 @@ export type SwarmSubmissionStatus =
   | "EXECUTING"
   | "SUBMITTED"
   | "VERIFIED"
+  | "PAID_OUT"
   | "REJECTED"
+  | "REFUNDED"
   | "FLAGGED";
 
 /**
@@ -57,6 +59,8 @@ export interface SwarmSubmission {
   verificationScorecard: VerificationScorecard | null;
   acceptedAt: string | null;
   submittedAt: string | null;
+  payoutTxHash: string | null;
+  refundTxHash?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,6 +80,7 @@ export interface SwarmTask {
   maxWorkers: number;
   status: SwarmStatus;
   requesterAddress: string;
+  refundedWei?: string;
   submissions?: SwarmSubmission[];
   clusterReport: SwarmClusterReport | null;
   createdAt: string;
