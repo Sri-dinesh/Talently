@@ -1,15 +1,26 @@
 // src/lib/wagmi.ts
-import { http, createStorage, noopStorage } from "wagmi";
-import { getDefaultConfig } from "@rainbow-me/rainbowkit";
+import { http, createStorage, noopStorage, createConfig } from "wagmi";
+import { connectorsForWallets } from "@rainbow-me/rainbowkit";
+import { metaMaskWallet, injectedWallet } from "@rainbow-me/rainbowkit/wallets";
 import { monadTestnet } from "./chain";
 
 export { monadTestnet };
 
-export const wagmiConfig = getDefaultConfig({
-  appName: "Human API",
-  projectId:
-    process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ||
-    "c0a5e82b79a14d5e89a2b4c5d6e7f809",
+const connectors = connectorsForWallets(
+  [
+    {
+      groupName: "Wallets",
+      wallets: [metaMaskWallet, injectedWallet],
+    },
+  ],
+  {
+    appName: "Human API",
+    projectId: "00000000000000000000000000000000",
+  }
+);
+
+export const wagmiConfig = createConfig({
+  connectors,
   chains: [monadTestnet],
   transports: {
     [monadTestnet.id]: http(
