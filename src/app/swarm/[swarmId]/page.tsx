@@ -1,42 +1,20 @@
 "use client";
-/**
- * Swarm Task Detail Page — /swarm/[swarmId]
- * Shows swarm state, worker slots, join/submit form, escrow payouts, escrow refunds, and Swarm Intelligence Report
- */
 
 import React, { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount, useWalletClient, usePublicClient } from "wagmi";
-import {
-  ArrowLeft,
-  Users,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  Send,
-  Zap,
-  BarChart3,
-  RefreshCw,
-  ThumbsUp,
-  ThumbsDown,
-  StopCircle,
-  AlertTriangle,
-  Coins,
-  ShieldCheck,
-  ExternalLink,
-  RotateCcw,
-  Sparkles,
-  X
+import { 
+  ArrowLeft, Users, Clock, Loader2, Send, ShieldCheck, 
+  Coins, Sparkles, CheckCircle2, AlertTriangle, X, Zap
 } from "lucide-react";
 import { WalletConnectButton } from "@/components/WalletConnectButton";
-import { SwarmReport } from "@/components/SwarmReport";
-import { VerificationScorecard } from "@/components/VerificationScorecard";
 import { useJoinSwarm } from "@/hooks/useJoinSwarm";
 import { useSubmitSwarmResult } from "@/hooks/useSubmitSwarmResult";
 import { formatAddress } from "@/lib/utils";
 import type { SwarmTask, SwarmSubmission } from "@/types/swarm";
+import { SwarmGraph } from "@/components/swarm-graph/SwarmGraph";
+import { Node } from "@xyflow/react";
 
 function formatMon(wei: string): string {
   try {
@@ -46,49 +24,42 @@ function formatMon(wei: string): string {
   }
 }
 
-const SUB_STATUS_STYLES: Record<string, string> = {
-  EXECUTING: "bg-[#C26C00]/10 text-[#C26C00] dark:text-[#F59E0B] border border-[#C26C00]/20",
-  SUBMITTED: "bg-[#C15F3C]/10 text-[#C15F3C] border border-[#C15F3C]/20",
-  VERIFIED: "bg-[#2E7D32]/10 text-[#2E7D32] dark:text-[#4CAF50] border border-[#2E7D32]/20",
-  PAID_OUT: "bg-[#2E7D32]/15 text-[#2E7D32] dark:text-[#4CAF50] border border-[#2E7D32]/30 font-semibold",
-  REJECTED: "bg-[#C15F3C]/15 text-[#C15F3C] dark:text-[#D97757] border border-[#C15F3C]/30 font-medium",
-  REFUNDED: "bg-[#8A857B]/15 text-[#6B665E] dark:text-[#B1ADA1] border border-[#8A857B]/30 font-medium",
-  FLAGGED: "bg-[#C15F3C]/10 text-[#C15F3C] border border-[#C15F3C]/20",
-};
-
-export default function SwarmDetailPage({ params }: { params: Promise<{ swarmId: string }> }) {
+export default function SwarmGraphPage({ params }: { params: Promise<{ swarmId: string }> }) {
   const { swarmId } = use(params);
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+  const router = useRouter();
 
   const [task, setTask] = useState<SwarmTask | null>(null);
   const [submissions, setSubmissions] = useState<SwarmSubmission[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Form State
   const [resultText, setResultText] = useState("");
   const [resultSeverity, setResultSeverity] = useState<"Low" | "Medium" | "High">("Medium");
   const [resultAttachmentUrl, setResultAttachmentUrl] = useState("");
-  const [triggeringReport, setTriggeringReport] = useState(false);
-  const [overridingId, setOverridingId] = useState<string | null>(null);
+  
+  // UI State
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [showPayoutOverlay, setShowPayoutOverlay] = useState(false);
+  const [showActionCenter, setShowActionCenter] = useState(false);
+
+  // Operation State
   const [payingOutId, setPayingOutId] = useState<string | null>(null);
   const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [overridingId, setOverridingId] = useState<string | null>(null);
+  const [triggeringReport, setTriggeringReport] = useState(false);
   const [payoutStatusText, setPayoutStatusText] = useState<string | null>(null);
   const [payoutSuccessMsg, setPayoutSuccessMsg] = useState<string | null>(null);
-  const [payoutError, setPayoutError] = useState<string | null>(null);
-  const [cancelConfirm, setCancelConfirm] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
-
-  const { joinSwarm, state: joinState, error: joinError } = useJoinSwarm();
-  const { submitSwarmResult, state: submitState, error: submitError } = useSubmitSwarmResult();
-  const router = useRouter();
+  
+  const { joinSwarm, state: joinState } = useJoinSwarm();
+  const { submitSwarmResult, state: submitState } = useSubmitSwarmResult();
 
   async function fetchTask() {
     try {
       const res = await fetch("/api/swarm/" + swarmId);
-      if (!res.ok) {
-        setTask(null);
-        return;
-      }
+      if (!res.ok) return setTask(null);
       const json = await res.json();
       setTask(json.data);
       setSubmissions(json.data?.submissions || []);
@@ -101,30 +72,48 @@ export default function SwarmDetailPage({ params }: { params: Promise<{ swarmId:
 
   useEffect(() => {
     fetchTask();
-    const interval = setInterval(fetchTask, 5000);
+    const interval = setInterval(fetchTask, 3000);
     return () => clearInterval(interval);
   }, [swarmId]);
 
   const userAddress = address?.toLowerCase();
-  const isRequester = Boolean(userAddress && task && task.requesterAddress === userAddress);
-  const mySubmission = userAddress ? submissions.find((s) => s.workerAddress === userAddress) : null;
+  const isRequester = Boolean(userAddress && task && task.requesterAddress.toLowerCase() === userAddress);
+  const mySubmission = userAddress ? submissions.find((s) => s.workerAddress.toLowerCase() === userAddress) : null;
   const hasJoined = Boolean(mySubmission);
-  const hasSubmitted = Boolean(mySubmission?.submittedAt);
-  const isPaidOut = mySubmission?.status === "PAID_OUT";
-  const isRejectedOrRefunded = mySubmission?.status === "REJECTED" || mySubmission?.status === "REFUNDED";
+  
   const slotsUsed = submissions.length;
   const slotsAvailable = (task?.maxWorkers || 0) - slotsUsed;
   const canJoin = !hasJoined && slotsAvailable > 0 && (task?.status === "OPEN" || task?.status === "IN_PROGRESS") && !isRequester;
 
-  const eligibleForPayout = submissions.filter(
-    (s) => s.status === "VERIFIED" || (s.status === "SUBMITTED" && s.submittedAt)
-  );
-  const eligibleForRefund = submissions.filter(
-    (s) => s.status === "REJECTED" || s.status === "FLAGGED"
-  );
-  const paidOutCount = submissions.filter((s) => s.status === "PAID_OUT").length;
-  const refundedCount = submissions.filter((s) => s.status === "REFUNDED").length;
+  // Anything awaiting a decision from the requester:
+  //  - SUBMITTED: AI gave REVIEW/manual verdict, requester must approve or reject
+  //  - VERIFIED:   AI gave PASS, requester must now trigger the on-chain payout
+  const reviewQueue = submissions.filter(s => {
+    const st = s.status?.toUpperCase();
+    return st === "SUBMITTED" || st === "VERIFIED";
+  });
+  const eligibleForPayout = submissions.filter(s => s.status === "VERIFIED" || (s.status === "SUBMITTED" && s.submittedAt));
+  const eligibleForRefund = submissions.filter(s => s.status === "REJECTED" || s.status === "FLAGGED");
+  const paidOutCount = submissions.filter(s => s.status === "PAID_OUT").length;
+  const refundedCount = submissions.filter(s => s.status === "REFUNDED").length;
+  const verifiedCount = submissions.filter(s => s.status === "VERIFIED" || s.status === "PAID_OUT").length;
+  // Backwards-compat alias used by the floating action center below.
+  const pendingSubmissions = reviewQueue;
 
+  const showSwarmComplete = task?.status === "COMPLETED" && paidOutCount > 0 && paidOutCount === verifiedCount;
+
+  // Auto-open the action center the first time the requester sees items
+  // needing review, so they never miss a pending payout / override.
+  useEffect(() => {
+    if (isRequester && reviewQueue.length > 0) {
+      setShowActionCenter(true);
+    } else {
+      setShowActionCenter(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRequester, reviewQueue.length]);
+
+  // Actions
   async function handleJoin() {
     if (!task || !userAddress) return;
     await joinSwarm({ swarmId: task.id, workerAddress: userAddress });
@@ -142,6 +131,7 @@ export default function SwarmDetailPage({ params }: { params: Promise<{ swarmId:
       resultAttachmentUrl: resultAttachmentUrl || null,
     });
     await fetchTask();
+    setSelectedNode(null); // Close sidebar after submit
   }
 
   async function handleGenerateReport() {
@@ -150,929 +140,574 @@ export default function SwarmDetailPage({ params }: { params: Promise<{ swarmId:
     try {
       await fetch("/api/swarm/" + task.id + "/report", { method: "POST" });
       await fetchTask();
-    } catch {
-      // ignore
     } finally {
       setTriggeringReport(false);
     }
   }
 
-  // Requester manual override — approve or reject any submitted slot
   async function handleOverride(submissionId: string, action: "APPROVE" | "REJECT") {
     if (!task || !userAddress) return;
     setOverridingId(submissionId + action);
     try {
-      await fetch("/api/swarm/" + task.id + "/override", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ submissionId, action, requesterAddress: userAddress }),
-      });
+      const target = submissions.find((s) => s.id === submissionId);
+
+      if (action === "APPROVE") {
+        // Path 1: AI already auto-verified → just execute the on-chain payout.
+        // Path 2: Submission is still SUBMITTED → override to VERIFIED first,
+        //         then send the funds in the same requester action.
+        const alreadyVerified = target?.status?.toUpperCase() === "VERIFIED";
+
+        let hash: `0x${string}` | "" = "";
+        if (walletClient && publicClient && target) {
+          hash = await walletClient.sendTransaction({
+            to: target.workerAddress as `0x${string}`,
+            value: BigInt(task.rewardWeiPerWorker),
+          });
+          await publicClient.waitForTransactionReceipt({ hash });
+        }
+
+        if (!alreadyVerified) {
+          // Flip SUBMITTED → VERIFIED so the payout endpoint will accept it.
+          await fetch("/api/swarm/" + task.id + "/override", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ submissionId, action: "APPROVE", requesterAddress: userAddress }),
+          });
+        }
+
+        await fetch("/api/swarm/" + task.id + "/payout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ submissionId, requesterAddress: userAddress, txHash: hash }),
+        });
+      } else {
+        // REJECT: never touch the chain — just record the override.
+        await fetch("/api/swarm/" + task.id + "/override", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ submissionId, action, requesterAddress: userAddress }),
+        });
+      }
       await fetchTask();
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error(err);
+      alert("Transaction failed or rejected.");
     } finally {
       setOverridingId(null);
     }
   }
 
-  // Requester release payout to worker(s)
-  async function handleReleasePayout(
-    targetSubmission?: SwarmSubmission,
-    payoutAll?: boolean,
-    useOnChainWallet: boolean = false
-  ) {
+  async function handleReleasePayout(payoutAll = true) {
     if (!task || !userAddress) return;
-    setPayingOutId(payoutAll ? "all" : (targetSubmission?.id || "unknown"));
-    setPayoutSuccessMsg(null);
-    setPayoutError(null);
-
-    const targets = payoutAll ? eligibleForPayout : (targetSubmission ? [targetSubmission] : []);
-    if (targets.length === 0) {
-      setPayingOutId(null);
-      return;
-    }
-
+    setPayingOutId(payoutAll ? "all" : "single");
+    setPayoutStatusText("Signing...");
+    
     try {
+      const targets = eligibleForPayout;
       const txHashes: Record<string, string> = {};
 
-      if (useOnChainWallet && walletClient && publicClient) {
+      if (walletClient && publicClient) {
         for (const target of targets) {
-          setPayoutStatusText(`Sign payout for ${formatAddress(target.workerAddress)} in wallet...`);
           try {
             const hash = await walletClient.sendTransaction({
               to: target.workerAddress as `0x${string}`,
               value: BigInt(task.rewardWeiPerWorker),
             });
-            setPayoutStatusText(`Confirming tx ${hash.slice(0, 10)}... on Monad Testnet`);
+            setPayoutStatusText(`Confirming tx ${hash.slice(0, 10)}...`);
             await publicClient.waitForTransactionReceipt({ hash });
             txHashes[target.id] = hash;
-          } catch (chainErr) {
-            console.warn("Wallet signing skipped:", chainErr);
+          } catch (err) {
+            console.error(err);
           }
         }
       }
 
-      setPayoutStatusText("Finalizing payout settlement...");
-      const res = await fetch("/api/swarm/" + task.id + "/payout", {
+      await fetch("/api/swarm/" + task.id + "/payout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          submissionId: targetSubmission?.id,
-          payoutAll: Boolean(payoutAll),
+          payoutAll,
           requesterAddress: userAddress,
-          txHash: targetSubmission ? txHashes[targetSubmission.id] : undefined,
           txHashes,
         }),
       });
 
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error?.message || "Failed to finalize payout");
-      }
-
-      setPayoutSuccessMsg(
-        payoutAll
-          ? `Successfully released payouts to all ${targets.length} workers on Monad!`
-          : `Successfully released ${formatMon(task.rewardWeiPerWorker)} MON payout to ${formatAddress(targets[0]?.workerAddress || "")}!`
-      );
+      setPayoutSuccessMsg("Payouts released successfully");
       await fetchTask();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to release payout";
-      setPayoutError(msg);
+      setTimeout(() => setPayoutSuccessMsg(null), 3000);
     } finally {
       setPayingOutId(null);
       setPayoutStatusText(null);
+      setShowPayoutOverlay(false);
     }
   }
 
-  // Requester claim refund for rejected / failed worker submissions back to creator
-  async function handleRefund(targetSubmission?: SwarmSubmission, refundAll?: boolean) {
+  async function handleRefund() {
     if (!task || !userAddress) return;
-    setRefundingId(refundAll ? "all" : (targetSubmission?.id || "unknown"));
-    setPayoutSuccessMsg(null);
-    setPayoutError(null);
-
+    setRefundingId("all");
     try {
-      const res = await fetch("/api/swarm/" + task.id + "/refund", {
+      await fetch("/api/swarm/" + task.id + "/refund", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requesterAddress: userAddress,
-          submissionId: targetSubmission?.id,
-          refundAll: Boolean(refundAll),
-        }),
+        body: JSON.stringify({ requesterAddress: userAddress, refundAll: true }),
       });
-
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error?.message || "Failed to process escrow refund");
-      }
-
-      const count = json.data?.refundedCount || (targetSubmission ? 1 : 0);
-      setPayoutSuccessMsg(
-        `Successfully refunded escrow (${count} rejected slot${count > 1 ? "s" : ""}) back to your creator wallet on Monad!`
-      );
       await fetchTask();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to process refund";
-      setPayoutError(msg);
     } finally {
       setRefundingId(null);
     }
   }
 
-  // Cancel / stop the swarm entirely
-  async function handleCancelSwarm() {
-    if (!task || !userAddress) return;
-    setCancelling(true);
-    try {
-      await fetch("/api/swarm/" + task.id + "/cancel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requesterAddress: userAddress }),
-      });
-      router.push("/swarm");
-    } catch {
-      // ignore
-    } finally {
-      setCancelling(false);
-      setCancelConfirm(false);
-    }
-  }
-
-  if (loading && !task) {
+  if (loading) {
     return (
-      <div className="py-20 text-center">
-        <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#C15F3C]" />
-        <p className="text-sm text-[#8A857B] mt-3">Loading swarm task from Monad...</p>
+      <div className="flex items-center justify-center min-h-screen bg-[#0A0A0A]">
+        <Loader2 className="w-8 h-8 text-[#C15F3C] animate-spin" />
       </div>
     );
   }
+
   if (!task) {
     return (
-      <div className="py-20 text-center space-y-4">
-        <AlertCircle className="w-10 h-10 text-[#C15F3C] mx-auto" />
-        <h2 className="text-xl font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">Swarm Task Not Found</h2>
-        <Link
-          href="/swarm"
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#F4F3EE] dark:bg-[#242422] text-xs font-medium text-[#1A1A18] dark:text-[#F4F3EE]"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to Swarm
-        </Link>
+      <div className="flex items-center justify-center min-h-screen bg-[#0A0A0A]">
+        <div className="text-[#B1ADA1]">Swarm task not found.</div>
       </div>
     );
   }
 
-  const totalRewardWei = (BigInt(task.rewardWeiPerWorker) * BigInt(task.maxWorkers)).toString();
-  const totalPaidWei = (BigInt(task.rewardWeiPerWorker) * BigInt(paidOutCount)).toString();
-  const totalRefundedWei = task.refundedWei || (BigInt(task.rewardWeiPerWorker) * BigInt(refundedCount)).toString();
+  // Find the selected submission if a human node is clicked
+  const selectedSubmission = selectedNode?.type === "human" 
+    ? submissions.find(s => s.id === selectedNode.data.submissionId)
+    : null;
 
   return (
-    <div className="max-w-4xl mx-auto py-2 space-y-6">
-      {/* Nav */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/swarm"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-[#8A857B] hover:text-[#1A1A18] dark:hover:text-[#F4F3EE] transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" /> Back to Swarm
-        </Link>
+    <div className="w-full h-screen bg-[#0A0A0A] overflow-hidden relative font-sans">
+      
+      {/* 1. Main Graph Engine (Background) */}
+      <div className="absolute inset-0 z-0">
+        <SwarmGraph 
+          task={task} 
+          submissions={submissions} 
+          onNodeClick={(node) => setSelectedNode(node)} 
+        />
+      </div>
+
+      {/* 2. Top Navigation Overlay */}
+      <div className="absolute top-0 left-0 right-0 p-4 z-10 flex justify-between items-start pointer-events-none">
+        <div className="pointer-events-auto">
+          <Link href="/swarm" className="inline-flex items-center gap-2 px-4 py-2 bg-[#121211]/80 backdrop-blur-md border border-[#2C2C29] rounded-xl text-sm font-medium text-[#B1ADA1] hover:text-[#F4F3EE] transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Hub
+          </Link>
+        </div>
+        <div className="pointer-events-auto">
+          <WalletConnectButton />
+        </div>
+      </div>
+
+      {/* 3. Left Panel: Swarm Info */}
+      <div className="absolute top-20 left-4 w-[320px] bg-[#121211]/80 backdrop-blur-md border border-[#2C2C29] rounded-2xl p-5 z-10 flex flex-col gap-4 pointer-events-auto shadow-2xl">
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchTask}
-            className="p-2 rounded-xl bg-[#F4F3EE] dark:bg-[#242422] text-[#8A857B] hover:text-[#1A1A18] dark:hover:text-[#F4F3EE] transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-[#C15F3C]/10 text-[#C15F3C] dark:text-[#D97757] border border-[#C15F3C]/20 uppercase tracking-wider flex items-center gap-1">
-            <Users className="w-3 h-3" />Swarm
-          </span>
+          <Sparkles className="w-5 h-5 text-[#C15F3C]" />
+          <h1 className="text-[#F4F3EE] font-bold text-lg tracking-tight leading-tight">Swarm Engine</h1>
         </div>
-      </div>
+        
+        <div className="space-y-1">
+          <span className="text-[10px] uppercase font-bold text-[#8A857B] tracking-wider">Task Target</span>
+          <p className="text-sm text-[#F4F3EE] font-medium">{task.title}</p>
+        </div>
 
-      {/* Header card */}
-      <div className="rounded-3xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29] p-6 sm:p-8 space-y-5 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {task.category && (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#F4F3EE] dark:bg-[#242422] text-[#6B665E] dark:text-[#B1ADA1] border border-[#E8E6DF] dark:border-[#3A3A36]">
-                  {task.category}
-                </span>
-              )}
-              {paidOutCount > 0 && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#2E7D32]/10 text-[#2E7D32] dark:text-[#4CAF50] border border-[#2E7D32]/20">
-                  <Coins className="w-3 h-3" />
-                  {paidOutCount}/{task.maxWorkers} Paid Out
-                </span>
-              )}
-              {refundedCount > 0 && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#C15F3C]/10 text-[#C15F3C] dark:text-[#D97757] border border-[#C15F3C]/20">
-                  <RotateCcw className="w-3 h-3" />
-                  {refundedCount} Refunded
-                </span>
-              )}
+        <div className="grid grid-cols-2 gap-2 pt-2">
+          <div className="p-3 bg-[#1A1A18] rounded-xl border border-[#3A3A36]">
+            <span className="text-[10px] uppercase font-bold text-[#8A857B]">Total Pool</span>
+            <div className="flex items-center gap-1.5 mt-1">
+              <Coins className="w-3.5 h-3.5 text-[#F59E0B]" />
+              <span className="text-sm font-mono font-bold text-[#F59E0B]">{formatMon((BigInt(task.rewardWeiPerWorker) * BigInt(task.maxWorkers)).toString())} MON</span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-semibold text-[#1A1A18] dark:text-[#F4F3EE] tracking-tight">
-              {task.title}
-            </h1>
           </div>
-          <div className="shrink-0 p-4 rounded-2xl bg-[#C15F3C]/5 border border-[#C15F3C]/20 text-right">
-            <div className="text-[10px] text-[#C15F3C] dark:text-[#D97757] font-semibold uppercase tracking-wider">
-              Per Worker Reward
-            </div>
-            <div className="text-2xl font-semibold text-[#C15F3C] dark:text-[#D97757] font-mono">
-              {formatMon(task.rewardWeiPerWorker)} MON
-            </div>
-            <div className="text-[10px] text-[#8A857B] dark:text-[#7D7970] mt-0.5">
-              Escrow Pool: {formatMon(totalRewardWei)} MON total
+          <div className="p-3 bg-[#1A1A18] rounded-xl border border-[#3A3A36]">
+            <span className="text-[10px] uppercase font-bold text-[#8A857B]">Active Nodes</span>
+            <div className="flex items-center gap-1.5 mt-1">
+              <Users className="w-3.5 h-3.5 text-[#3B82F6]" />
+              <span className="text-sm font-mono font-bold text-[#3B82F6]">{slotsUsed}/{task.maxWorkers}</span>
             </div>
           </div>
         </div>
 
-        {/* Escrow Status & Accounting Bar */}
-        <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-[#FAF9F5] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#2C2C29] text-center text-xs">
-          <div>
-            <span className="text-[10px] text-[#8A857B] uppercase block">Total Escrow Locked</span>
-            <span className="font-semibold text-[#1A1A18] dark:text-[#F4F3EE] font-mono">{formatMon(totalRewardWei)} MON</span>
-          </div>
-          <div className="border-x border-[#E8E6DF] dark:border-[#2C2C29]">
-            <span className="text-[10px] text-[#2E7D32] dark:text-[#4CAF50] uppercase block">Paid to Workers</span>
-            <span className="font-semibold text-[#2E7D32] dark:text-[#4CAF50] font-mono">{formatMon(totalPaidWei)} MON ({paidOutCount})</span>
-          </div>
-          <div>
-            <span className="text-[10px] text-[#C15F3C] dark:text-[#D97757] uppercase block">Refunded to Creator</span>
-            <span className="font-semibold text-[#C15F3C] dark:text-[#D97757] font-mono">{formatMon(totalRefundedWei)} MON ({refundedCount})</span>
-          </div>
-        </div>
-
-        {/* Description */}
-        <div className="p-4 rounded-2xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#2C2C29] text-xs text-[#1A1A18] dark:text-[#F4F3EE] leading-relaxed whitespace-pre-wrap">
-          {task.description}
-        </div>
-
-        {/* Acceptance Criteria */}
-        {task.requirements.length > 0 && (
-          <div className="p-4 rounded-2xl bg-[#FAF9F5] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#2C2C29] space-y-2">
-            <span className="text-[10px] font-semibold text-[#8A857B] uppercase tracking-wider block">
-              Acceptance Criteria
-            </span>
-            {task.requirements.map((req, idx) => (
-              <div key={idx} className="flex items-center gap-2 text-xs text-[#1A1A18] dark:text-[#F4F3EE]">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#2E7D32] dark:text-[#4CAF50] shrink-0" />
-                <span>{req}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Worker slots panel */}
-        <div>
-          <div className="flex items-center justify-between text-xs font-semibold text-[#8A857B] dark:text-[#7D7970] uppercase tracking-wider mb-3">
-            <span className="flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-[#C15F3C]" />
-              Worker Slots ({slotsUsed}/{task.maxWorkers})
-            </span>
-            {task.estimatedMinutes && (
-              <span className="flex items-center gap-1 normal-case">
-                <Clock className="w-3 h-3" />
-                ~{task.estimatedMinutes}m each
-              </span>
-            )}
-          </div>
-          <div className="h-1.5 rounded-full bg-[#F4F3EE] dark:bg-[#242422] mb-3 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-[#C15F3C] transition-all duration-500"
-              style={{ width: `${Math.min((slotsUsed / task.maxWorkers) * 100, 100)}%` }}
-            />
-          </div>
-          <div className="space-y-2">
-            {submissions.map((sub, idx) => {
-              const isSubPaidOut = sub.status === "PAID_OUT";
-              const isSubVerified = sub.status === "VERIFIED";
-              const isSubRejected = sub.status === "REJECTED" || sub.status === "FLAGGED";
-              const isSubRefunded = sub.status === "REFUNDED";
-
-              return (
-                <div
-                  key={sub.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#2C2C29] gap-2.5"
-                >
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <span className="w-5 h-5 rounded-lg bg-[#C15F3C]/10 text-[#C15F3C] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                      {idx + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-mono text-[#1A1A18] dark:text-[#F4F3EE]">
-                          {formatAddress(sub.workerAddress)}
-                        </span>
-                        {sub.workerAddress === userAddress && (
-                          <span className="text-[9px] font-semibold text-[#C15F3C] dark:text-[#D97757] px-1.5 py-0.2 rounded bg-[#C15F3C]/10">
-                            You
-                          </span>
-                        )}
-                        {isSubPaidOut && (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] text-[#2E7D32] dark:text-[#4CAF50] font-semibold">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Paid
-                          </span>
-                        )}
-                        {isSubRefunded && (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] text-[#8A857B] font-semibold">
-                            <RotateCcw className="w-3 h-3" />
-                            Refunded
-                          </span>
-                        )}
-                      </div>
-                      {/* Show submission preview */}
-                      {sub.resultText && (
-                        <p className="text-[11px] text-[#8A857B] dark:text-[#7D7970] mt-0.5 line-clamp-1">
-                          {sub.resultText.slice(0, 80)}
-                          {sub.resultText.length > 80 ? "…" : ""}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                    {/* Status Badge */}
-                    {isSubPaidOut ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#2E7D32]/15 text-[#2E7D32] dark:text-[#4CAF50] border border-[#2E7D32]/30">
-                          <Coins className="w-3 h-3" />
-                          Paid Out ({formatMon(task.rewardWeiPerWorker)} MON)
-                        </span>
-                        {sub.payoutTxHash && (
-                          <a
-                            href={`https://testnet.monadexplorer.com/tx/${sub.payoutTxHash}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[10px] text-[#C15F3C] dark:text-[#D97757] hover:underline flex items-center gap-0.5"
-                            title="View on Monad Explorer"
-                          >
-                            <span>Tx</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        )}
-                      </div>
-                    ) : isSubRefunded ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#8A857B]/15 text-[#6B665E] dark:text-[#B1ADA1] border border-[#8A857B]/30">
-                        <RotateCcw className="w-3 h-3" />
-                        Refunded to Creator
-                      </span>
-                    ) : (
-                      <span className={"px-2.5 py-0.5 rounded-full text-[9px] font-semibold " + (SUB_STATUS_STYLES[sub.status] || "")}>
-                        {sub.status}
-                      </span>
-                    )}
-
-                    {/* Requester Actions: Pay or Refund or Override */}
-                    {isRequester && sub.submittedAt && !isSubPaidOut && !isSubRefunded && (
-                      <div className="flex items-center gap-1.5">
-                        {/* Payout button if verified/submitted */}
-                        {(isSubVerified || sub.status === "SUBMITTED") && (
-                          <button
-                            onClick={() => handleReleasePayout(sub, false, false)}
-                            disabled={payingOutId !== null}
-                            title="Release escrow payout to this worker"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#2E7D32] hover:bg-[#256327] text-white text-[10px] font-semibold shadow-2xs transition-colors disabled:opacity-50"
-                          >
-                            {payingOutId === sub.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <Coins className="w-3 h-3" />
-                            )}
-                            <span>Pay {formatMon(task.rewardWeiPerWorker)} MON</span>
-                          </button>
-                        )}
-
-                        {/* Refund button if rejected */}
-                        {isSubRejected && (
-                          <button
-                            onClick={() => handleRefund(sub, false)}
-                            disabled={refundingId !== null}
-                            title="Claim escrow refund for rejected submission"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#C15F3C] hover:bg-[#A84F30] text-white text-[10px] font-semibold shadow-2xs transition-colors disabled:opacity-50"
-                          >
-                            {refundingId === sub.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <RotateCcw className="w-3 h-3" />
-                            )}
-                            <span>Refund {formatMon(task.rewardWeiPerWorker)} MON</span>
-                          </button>
-                        )}
-
-                        {/* Quick Override Buttons */}
-                        <button
-                          onClick={() => handleOverride(sub.id, "APPROVE")}
-                          disabled={overridingId !== null || isSubVerified}
-                          title="Approve this submission"
-                          className="p-1.5 rounded-lg bg-[#2E7D32]/10 text-[#2E7D32] hover:bg-[#2E7D32]/20 disabled:opacity-40 transition-colors"
-                        >
-                          {overridingId === sub.id + "APPROVE" ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <ThumbsUp className="w-3 h-3" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => handleOverride(sub.id, "REJECT")}
-                          disabled={overridingId !== null || isSubRejected}
-                          title="Reject this submission (enables refund)"
-                          className="p-1.5 rounded-lg bg-[#C15F3C]/10 text-[#C15F3C] hover:bg-[#C15F3C]/20 disabled:opacity-40 transition-colors"
-                        >
-                          {overridingId === sub.id + "REJECT" ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <ThumbsDown className="w-3 h-3" />
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {Array.from({ length: slotsAvailable }).map((_, i) => (
-              <div key={"empty-" + i} className="flex items-center p-3 rounded-xl border border-dashed border-[#E8E6DF] dark:border-[#2C2C29]">
-                <span className="text-xs text-[#B1ADA1] dark:text-[#7D7970]">Open slot</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Action panel */}
-      <div className="space-y-4">
-        {/* Payout status banner with instant-skip and cancel controls */}
-        {payoutStatusText && (
-          <div className="p-4 rounded-2xl bg-[#C15F3C]/10 border border-[#C15F3C]/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <Loader2 className="w-4 h-4 animate-spin text-[#C15F3C] shrink-0" />
-              <span className="text-xs font-semibold text-[#C15F3C]">{payoutStatusText}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleReleasePayout(undefined, true, false)}
-                className="px-3 py-1 rounded-lg bg-[#2E7D32] text-white text-[11px] font-semibold hover:bg-[#256327] transition-colors"
-              >
-                Release Instantly ⚡
-              </button>
-              <button
-                onClick={() => { setPayingOutId(null); setPayoutStatusText(null); }}
-                className="p-1 rounded-lg text-[#8A857B] hover:text-[#1A1A18] dark:hover:text-[#F4F3EE]"
-                title="Cancel"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Notification banner */}
-        {payoutSuccessMsg && (
-          <div className="p-4 rounded-2xl bg-[#2E7D32]/15 border border-[#2E7D32]/30 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#2E7D32] dark:text-[#4CAF50]">
-              <Coins className="w-4 h-4" />
-              <span>{payoutSuccessMsg}</span>
-            </div>
-            <button
-              onClick={() => setPayoutSuccessMsg(null)}
-              className="text-[#2E7D32] dark:text-[#4CAF50] text-xs font-bold hover:underline"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* Error banner */}
-        {payoutError && (
-          <div className="p-4 rounded-2xl bg-[#C15F3C]/10 border border-[#C15F3C]/30 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs font-medium text-[#C15F3C]">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>{payoutError}</span>
-            </div>
-            <button
-              onClick={() => setPayoutError(null)}
-              className="text-[#C15F3C] text-xs font-bold hover:underline"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* Not connected */}
-        {!isConnected && (
-          <div className="p-6 rounded-3xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29]">
-            <WalletConnectButton />
-          </div>
-        )}
-
-        {/* Can join */}
-        {isConnected && canJoin && (
-          <div className="p-6 rounded-3xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29] space-y-4 shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#2E7D32]/10 text-[#2E7D32] flex items-center justify-center">
-                <Zap className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">Join This Swarm</h3>
-                <p className="text-xs text-[#8A857B]">
-                  Earn {formatMon(task.rewardWeiPerWorker)} MON on Monad for verified execution. {slotsAvailable} slot{slotsAvailable !== 1 ? "s" : ""} remaining.
-                </p>
-              </div>
-            </div>
-            {joinError && (
-              <div className="p-3 rounded-xl bg-[#C15F3C]/10 border border-[#C15F3C]/30 text-[#C15F3C] text-xs">
-                {joinError}
-              </div>
-            )}
-            <button
+        {/* Action Buttons for Requester/Worker */}
+        <div className="pt-2 flex flex-col gap-2">
+          {canJoin && (
+            <button 
               onClick={handleJoin}
-              disabled={joinState === "joining"}
-              className="w-full py-3.5 rounded-xl bg-[#C15F3C] hover:bg-[#A84F30] active:scale-[0.985] text-white font-medium text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              disabled={joinState === "joining" || !isConnected}
+              className="w-full py-3 rounded-xl font-bold text-sm tracking-wide bg-[#C15F3C] text-white hover:bg-[#D97757] disabled:opacity-50 transition-all flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(193,95,60,0.3)]"
             >
-              {joinState === "joining" ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Joining Swarm...</span>
-                </>
-              ) : (
-                <>
-                  <Users className="w-4 h-4" />
-                  <span>Join Swarm — {formatMon(task.rewardWeiPerWorker)} MON reward</span>
-                </>
-              )}
+              {joinState === "joining" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {isConnected ? "INJECT NODE (JOIN SWARM)" : "CONNECT WALLET"}
             </button>
-          </div>
-        )}
+          )}
 
-        {/* Worker executing */}
-        {isConnected && hasJoined && !hasSubmitted && (
-          <div className="p-6 rounded-3xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29] space-y-5 shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#C26C00]/10 text-[#C26C00] flex items-center justify-center">
-                <Clock className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">Submit Your Findings</h3>
-                <p className="text-xs text-[#8A857B]">
-                  You have joined this swarm. Submit your detailed findings to earn {formatMon(task.rewardWeiPerWorker)} MON.
-                </p>
-              </div>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#6B665E] dark:text-[#B1ADA1] mb-1.5">
-                  Severity
-                </label>
-                <select
-                  value={resultSeverity}
-                  onChange={(e) => setResultSeverity(e.target.value as "Low" | "Medium" | "High")}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#3A3A36] text-[#1A1A18] dark:text-[#F4F3EE] text-xs focus:outline-none focus:border-[#C15F3C]"
-                >
-                  <option value="Low">Low — Minor issue</option>
-                  <option value="Medium">Medium — Notable friction</option>
-                  <option value="High">High — Blocker or crash</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#6B665E] dark:text-[#B1ADA1] mb-1.5">
-                  Findings & Reproduction Steps <span className="text-[#C15F3C]">*</span>
-                </label>
-                <textarea
-                  required
-                  rows={4}
-                  value={resultText}
-                  onChange={(e) => setResultText(e.target.value)}
-                  placeholder="Describe what you found, steps to reproduce, and your overall assessment..."
-                  className="w-full px-4 py-2.5 rounded-xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#3A3A36] text-[#1A1A18] dark:text-[#F4F3EE] placeholder-[#8A857B] text-xs focus:outline-none focus:border-[#C15F3C] resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#6B665E] dark:text-[#B1ADA1] mb-1.5">
-                  Proof / Screenshot URL (Optional)
-                </label>
-                <input
-                  type="url"
-                  value={resultAttachmentUrl}
-                  onChange={(e) => setResultAttachmentUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full px-4 py-2.5 rounded-xl bg-[#FBFBF9] dark:bg-[#181817] border border-[#E8E6DF] dark:border-[#3A3A36] text-[#1A1A18] dark:text-[#F4F3EE] placeholder-[#8A857B] text-xs focus:outline-none focus:border-[#C15F3C]"
-                />
-              </div>
-              {submitError && (
-                <div className="p-3 rounded-xl bg-[#C15F3C]/10 border border-[#C15F3C]/30 text-[#C15F3C] text-xs">
-                  {submitError}
-                </div>
-              )}
-              <button
-                type="submit"
-                disabled={submitState === "submitting" || !resultText.trim()}
-                className="w-full py-3.5 rounded-xl bg-[#C15F3C] hover:bg-[#A84F30] active:scale-[0.985] text-white font-medium text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-              >
-                {submitState === "submitting" ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Submitting & Verifying...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>Submit Findings — Run 4-Layer Verification</span>
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Worker: Submission already paid out! */}
-        {isConnected && isPaidOut && (
-          <div className="p-6 rounded-3xl bg-[#2E7D32]/10 border border-[#2E7D32]/25 space-y-3 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#2E7D32]/20 text-[#2E7D32] dark:text-[#4CAF50] flex items-center justify-center shrink-0">
-                  <Coins className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold text-[#2E7D32] dark:text-[#4CAF50]">
-                    🎉 Escrow Payout Released on Monad!
-                  </h3>
-                  <p className="text-xs text-[#5C5851] dark:text-[#B1ADA1]">
-                    Reward of <strong className="text-[#2E7D32] dark:text-[#4CAF50] font-mono">{formatMon(task.rewardWeiPerWorker)} MON</strong> has been transferred directly to your wallet.
-                  </p>
-                </div>
-              </div>
-              {mySubmission?.payoutTxHash && (
-                <a
-                  href={`https://testnet.monadexplorer.com/tx/${mySubmission.payoutTxHash}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#2E7D32]/15 text-[#2E7D32] dark:text-[#4CAF50] text-xs font-semibold hover:bg-[#2E7D32]/25 transition-colors shrink-0"
-                >
-                  <span>Monad Explorer</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
-            </div>
-            {mySubmission?.verificationScorecard && (
-              <VerificationScorecard scorecard={mySubmission.verificationScorecard} />
-            )}
-          </div>
-        )}
-
-        {/* Worker: Rejected or refunded */}
-        {isConnected && isRejectedOrRefunded && (
-          <div className="p-5 rounded-2xl bg-[#C15F3C]/10 border border-[#C15F3C]/25 space-y-2">
-            <div className="flex items-center gap-2 text-[#C15F3C] font-semibold text-xs">
-              <AlertTriangle className="w-4 h-4" />
-              <span>Submission Rejected — Escrow Refunded to Creator</span>
-            </div>
-            <p className="text-xs text-[#8A857B] dark:text-[#7D7970]">
-              This submission was flagged by the verification engine or rejected by the creator. Escrow funds ({formatMon(task.rewardWeiPerWorker)} MON) have been returned to the task creator.
-            </p>
-          </div>
-        )}
-
-        {/* Worker: Submitted & verified but awaiting payout */}
-        {isConnected && hasSubmitted && !isPaidOut && !isRejectedOrRefunded && mySubmission?.verificationScorecard && (
-          <div className="space-y-3">
-            <div className="p-4 rounded-2xl bg-[#2E7D32]/5 border border-[#2E7D32]/15 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-[#2E7D32] dark:text-[#4CAF50]" />
-              <p className="text-xs text-[#2E7D32] dark:text-[#4CAF50] font-medium">
-                Your submission is verified! Payout of {formatMon(task.rewardWeiPerWorker)} MON will be released by the requester upon escrow payout confirmation.
-              </p>
-            </div>
-            <VerificationScorecard scorecard={mySubmission.verificationScorecard} />
-          </div>
-        )}
-
-        {/* Requester: Batch Escrow Release Panel */}
-        {isConnected && isRequester && eligibleForPayout.length > 0 && task.status !== "CANCELLED" && (
-          <div className="p-6 rounded-3xl bg-[#2E7D32]/5 border border-[#2E7D32]/25 space-y-4 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#2E7D32]/15 text-[#2E7D32] dark:text-[#4CAF50] flex items-center justify-center shrink-0">
-                  <Coins className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">
-                    Release Swarm Escrow Payouts
-                  </h3>
-                  <p className="text-xs text-[#8A857B] dark:text-[#7D7970]">
-                    {eligibleForPayout.length} worker{eligibleForPayout.length > 1 ? "s have" : " has"} submitted verified findings.
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="text-base font-bold text-[#2E7D32] dark:text-[#4CAF50] font-mono block">
-                  {(parseFloat(formatMon(task.rewardWeiPerWorker)) * eligibleForPayout.length).toFixed(4)} MON
-                </span>
-                <span className="text-[10px] text-[#8A857B]">Total to release</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {/* Primary 1-Click Fast Settlement */}
-              <button
-                onClick={() => handleReleasePayout(undefined, true, false)}
-                disabled={payingOutId !== null}
-                className="py-3.5 px-4 rounded-xl bg-[#2E7D32] hover:bg-[#256327] active:scale-[0.985] text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50"
-              >
-                {payingOutId === "all" ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Releasing Payouts...</span>
-                  </>
-                ) : (
-                  <>
-                    <Coins className="w-4 h-4" />
-                    <span>Instant Release ({eligibleForPayout.length} Workers · {(parseFloat(formatMon(task.rewardWeiPerWorker)) * eligibleForPayout.length).toFixed(4)} MON)</span>
-                  </>
-                )}
-              </button>
-
-              {/* Optional On-Chain Wallet Sign */}
-              <button
-                onClick={() => handleReleasePayout(undefined, true, true)}
-                disabled={payingOutId !== null}
-                className="py-3.5 px-4 rounded-xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#2E7D32]/30 text-[#2E7D32] dark:text-[#4CAF50] hover:bg-[#2E7D32]/10 active:scale-[0.985] font-semibold text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-              >
-                <Zap className="w-4 h-4" />
-                <span>Sign in MetaMask & Transfer MON</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Requester: Escrow Refund Panel for Rejected Slots */}
-        {isConnected && isRequester && eligibleForRefund.length > 0 && task.status !== "CANCELLED" && (
-          <div className="p-6 rounded-3xl bg-[#C15F3C]/5 border border-[#C15F3C]/25 space-y-4 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#C15F3C]/15 text-[#C15F3C] flex items-center justify-center shrink-0">
-                  <RotateCcw className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-[#1A1A18] dark:text-[#F4F3EE]">
-                    Claim Escrow Refund for Rejected Slots
-                  </h3>
-                  <p className="text-xs text-[#8A857B] dark:text-[#7D7970]">
-                    {eligibleForRefund.length} submission{eligibleForRefund.length > 1 ? "s were" : " was"} rejected. Reclaim unspent escrow reward back to your creator wallet.
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="text-base font-bold text-[#C15F3C] dark:text-[#D97757] font-mono block">
-                  {(parseFloat(formatMon(task.rewardWeiPerWorker)) * eligibleForRefund.length).toFixed(4)} MON
-                </span>
-                <span className="text-[10px] text-[#8A857B]">Refund available</span>
-              </div>
-            </div>
-
+          {/* RELEASE PAYOUTS — visible whenever there are verified (or submitted)
+              workers who haven't been paid out yet, regardless of task status. */}
+          {isRequester && eligibleForPayout.length > 0 && paidOutCount < eligibleForPayout.length && (
             <button
-              onClick={() => handleRefund(undefined, true)}
-              disabled={refundingId !== null}
-              className="w-full py-3.5 px-4 rounded-xl bg-[#C15F3C] hover:bg-[#A84F30] active:scale-[0.985] text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50"
+              onClick={() => setShowPayoutOverlay(true)}
+              className="w-full py-2.5 rounded-xl font-bold text-xs tracking-wide bg-[#10B981] text-white hover:bg-[#34D399] transition-all flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
             >
-              {refundingId === "all" ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Processing Escrow Refund...</span>
-                </>
-              ) : (
-                <>
-                  <RotateCcw className="w-4 h-4" />
-                  <span>Claim Escrow Refund ({eligibleForRefund.length} Slots · {(parseFloat(formatMon(task.rewardWeiPerWorker)) * eligibleForRefund.length).toFixed(4)} MON)</span>
-                </>
-              )}
+              <Coins className="w-4 h-4" />
+              RELEASE PAYOUTS ({eligibleForPayout.length})
             </button>
-          </div>
-        )}
-
-        {/* Requester: Generate report manually */}
-        {isConnected && isRequester && submissions.filter((s) => s.submittedAt).length > 0 && task.status !== "COMPLETED" && task.status !== "CANCELLED" && (
-          <div className="p-6 rounded-3xl bg-[#FFFFFF] dark:bg-[#1E1E1C] border border-[#E8E6DF] dark:border-[#2C2C29] space-y-3 shadow-xs">
-            <h3 className="text-sm font-semibold text-[#1A1A18] dark:text-[#F4F3EE] flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-[#C15F3C]" />
-              Generate Swarm Intelligence Report
-            </h3>
-            <p className="text-xs text-[#8A857B]">
-              {submissions.filter((s) => s.submittedAt).length} submission{submissions.filter((s) => s.submittedAt).length !== 1 ? "s" : ""} ready to process. You can generate the report before all slots fill.
-            </p>
+          )}
+          
+          {isRequester && task.status === "OPEN" && (
             <button
               onClick={handleGenerateReport}
-              disabled={triggeringReport}
-              className="w-full py-3 rounded-xl bg-[#1A1A18] dark:bg-[#F4F3EE] hover:bg-[#2C2C29] dark:hover:bg-[#ECEAE4] text-white dark:text-[#1A1A18] font-medium text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              disabled={triggeringReport || slotsUsed === 0}
+              className="w-full py-2.5 rounded-xl font-bold text-xs tracking-wide bg-[#3B82F6] text-white hover:bg-[#60A5FA] disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(59,130,246,0.2)]"
             >
-              {triggeringReport ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Running Swarm Engine...</span>
-                </>
-              ) : (
-                <>
-                  <BarChart3 className="w-4 h-4" />
-                  <span>Generate Swarm Intelligence Report</span>
-                </>
-              )}
+              {triggeringReport ? "GENERATING..." : "FORCE VERIFICATION"}
+            </button>
+          )}
+
+          {isRequester && (task.status === "COMPLETED" || task.status === "CANCELLED") && eligibleForRefund.length > 0 && refundedCount < eligibleForRefund.length && (
+            <button
+              onClick={handleRefund}
+              disabled={!!refundingId}
+              className="w-full py-2.5 rounded-xl font-bold text-xs tracking-wide bg-[#8A857B] text-white hover:bg-[#B1ADA1] transition-all flex justify-center items-center gap-2"
+            >
+              {refundingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
+              REFUND ESCROW
+            </button>
+          )}
+
+        </div>
+
+      </div>
+
+      {/* 4. Right Panel: Inspector / Submission */}
+      {(hasJoined || selectedSubmission) && (
+        <div className="absolute top-20 right-4 w-[360px] max-h-[calc(100vh-120px)] overflow-y-auto bg-[#121211]/90 backdrop-blur-xl border border-[#3A3A36] rounded-2xl shadow-2xl z-20 pointer-events-auto">
+          <div className="sticky top-0 bg-[#121211]/95 px-5 py-4 border-b border-[#2C2C29] flex justify-between items-center">
+            <h2 className="text-[#F4F3EE] font-bold text-sm tracking-wide flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#C15F3C]" />
+              NODE INSPECTOR
+            </h2>
+            <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-[#2C2C29] rounded-md transition-colors text-[#8A857B]">
+              <X className="w-4 h-4" />
             </button>
           </div>
-        )}
 
-        {/* Requester: Stop / Cancel Swarm */}
-        {isConnected && isRequester && task.status !== "COMPLETED" && task.status !== "CANCELLED" && (
-          <div className="p-5 rounded-2xl border border-[#C15F3C]/20 bg-[#C15F3C]/3 dark:bg-[#C15F3C]/5 space-y-3">
-            <div className="flex items-center gap-2">
-              <StopCircle className="w-4 h-4 text-[#C15F3C]" />
-              <h3 className="text-sm font-semibold text-[#C15F3C]">Stop Swarm</h3>
-            </div>
-            {!cancelConfirm ? (
-              <>
-                <p className="text-xs text-[#8A857B] dark:text-[#7D7970]">
-                  Stop and remove this swarm. Workers already executing will no longer be able to submit. Unspent escrow pool will be refunded.
-                </p>
+          <div className="p-5">
+            {/* If looking at own active submission */}
+            {hasJoined && mySubmission?.status === "EXECUTING" && (!selectedSubmission || selectedSubmission.id === mySubmission.id) && (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="p-3 bg-[#3B82F6]/10 border border-[#3B82F6]/30 rounded-xl mb-4">
+                  <span className="text-[#3B82F6] text-xs font-semibold flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] animate-pulse" />
+                    NODE ASSIGNED. AWAITING DATA.
+                  </span>
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[#8A857B] uppercase tracking-wider">Execution Payload</label>
+                  <textarea
+                    value={resultText}
+                    onChange={e => setResultText(e.target.value)}
+                    required
+                    rows={4}
+                    className="w-full p-3 bg-[#0A0A0A] border border-[#2C2C29] rounded-xl text-sm text-[#F4F3EE] focus:border-[#C15F3C] outline-none font-mono"
+                    placeholder="Enter evidence or proof of work..."
+                  />
+                </div>
+                
                 <button
-                  onClick={() => setCancelConfirm(true)}
-                  className="w-full py-2.5 rounded-xl border border-[#C15F3C]/40 text-[#C15F3C] text-sm font-medium hover:bg-[#C15F3C]/10 transition-colors flex items-center justify-center gap-2"
+                  type="submit"
+                  disabled={submitState === "submitting"}
+                  className="w-full py-3 rounded-xl font-bold text-sm tracking-wide bg-[#F4F3EE] text-[#0A0A0A] hover:bg-white disabled:opacity-50 transition-all flex justify-center items-center gap-2 mt-4"
                 >
-                  <StopCircle className="w-4 h-4" /> Stop This Swarm & Reclaim Escrow
+                  {submitState === "submitting" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  TRANSMIT PACKET
                 </button>
-              </>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-[#C15F3C]/10 border border-[#C15F3C]/20">
-                  <AlertTriangle className="w-4 h-4 text-[#C15F3C] shrink-0" />
-                  <p className="text-xs text-[#C15F3C] font-medium">This will permanently stop the swarm and refund unspent escrow. Are you sure?</p>
+              </form>
+            )}
+
+            {/* If inspecting a specific submission (Requester view or past submission) */}
+            {selectedSubmission && selectedSubmission.status !== "EXECUTING" && (
+              <div className="space-y-5">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-[#8A857B] uppercase tracking-wider">Worker Address</span>
+                  <span className="text-sm font-mono text-[#F4F3EE] bg-[#1A1A18] px-2 py-1 rounded border border-[#2C2C29]">
+                    {formatAddress(selectedSubmission.workerAddress)}
+                  </span>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setCancelConfirm(false)}
-                    className="flex-1 py-2.5 rounded-xl border border-[#E8E6DF] dark:border-[#2C2C29] text-xs font-medium text-[#8A857B] hover:text-[#1A1A18] dark:hover:text-[#F4F3EE] transition-colors"
-                  >
-                    Keep Running
-                  </button>
-                  <button
-                    onClick={handleCancelSwarm}
-                    disabled={cancelling}
-                    className="flex-1 py-2.5 rounded-xl bg-[#C15F3C] hover:bg-[#A84F30] text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-60"
-                  >
-                    {cancelling ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Stopping...
-                      </>
-                    ) : (
-                      <>
-                        <StopCircle className="w-3.5 h-3.5" />
-                        Yes, Stop & Refund
-                      </>
-                    )}
-                  </button>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-[#8A857B] uppercase tracking-wider">Payload</span>
+                  <div className="text-sm text-[#B1ADA1] bg-[#0A0A0A] p-3 rounded-xl border border-[#2C2C29] font-mono break-words">
+                    {selectedSubmission.resultText || "No text provided."}
+                  </div>
                 </div>
+
+                {isRequester && (selectedSubmission.status === "SUBMITTED" || selectedSubmission.status === "VERIFIED") && (
+                  <div className="grid grid-cols-2 gap-2 pt-4 border-t border-[#2C2C29]">
+                    <button
+                      onClick={() => handleOverride(selectedSubmission.id, "REJECT")}
+                      disabled={!!overridingId}
+                      className="py-2 bg-[#EF4444]/20 hover:bg-[#EF4444]/30 text-[#EF4444] font-bold text-xs rounded-lg transition-colors border border-[#EF4444]/30 flex justify-center items-center gap-2"
+                    >
+                      {overridingId === selectedSubmission.id + "REJECT" && <Loader2 className="w-3 h-3 animate-spin" />}
+                      REJECT
+                    </button>
+                    <button
+                      onClick={() => handleOverride(selectedSubmission.id, "APPROVE")}
+                      disabled={!!overridingId}
+                      className="py-2 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-black text-xs rounded-lg transition-colors border border-[#10B981] flex justify-center items-center gap-2"
+                    >
+                      {overridingId === selectedSubmission.id + "APPROVE" && <Loader2 className="w-3 h-3 animate-spin" />}
+                      {selectedSubmission.status === "VERIFIED" ? "PAY & APPROVE" : "APPROVE"}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Already cancelled banner */}
-        {task.status === "CANCELLED" && (
-          <div className="p-4 rounded-2xl bg-[#B1ADA1]/10 border border-[#B1ADA1]/30 flex items-center gap-3">
-            <StopCircle className="w-5 h-5 text-[#6B665E] shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-[#6B665E]">Swarm Cancelled & Escrow Refunded</p>
-              <p className="text-xs text-[#8A857B]">This swarm has been stopped by the requester and unspent escrow has been returned.</p>
-            </div>
+      {/* 5. Bottom Footer (Monad Status) */}
+      <div className="absolute bottom-0 left-0 right-0 p-3 z-10 flex justify-between items-end pointer-events-none">
+        <div className="pointer-events-auto flex items-center gap-3 bg-[#121211]/80 backdrop-blur-md px-4 py-2 rounded-xl border border-[#2C2C29]">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#836EF9] animate-pulse" />
+            <span className="text-xs font-bold text-[#F4F3EE]">MONAD TESTNET</span>
           </div>
-        )}
+          <div className="w-px h-3 bg-[#3A3A36]" />
+          <span className="text-xs font-mono text-[#8A857B]">Tps: 10k+</span>
+        </div>
       </div>
 
-      {/* Swarm Intelligence Report */}
-      {task.status === "PROCESSING" && (
-        <SwarmReport
-          report={{
-            participantCount: 0,
-            validCount: 0,
-            flaggedCount: 0,
-            uniqueFindings: [],
-            topIssue: null,
-            topIssueConfirmedBy: 0,
-            consensusScore: 0,
-            confidence: 0,
-            aiSummary: null,
-            generatedAt: new Date().toISOString(),
-          }}
-          isProcessing
-        />
+      {/* 5b. Persistent Swarm Activity Bar — always visible at bottom-center so
+          workers AND requesters can see live swarm state and quick actions. */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+        <div className="flex items-center gap-2 bg-[#121211]/90 backdrop-blur-xl border border-[#2C2C29] rounded-2xl px-3 py-2 shadow-2xl">
+          {/* Live swarm counters */}
+          <div className="flex items-center gap-1.5 px-2">
+            <Users className="w-3.5 h-3.5 text-[#3B82F6]" />
+            <span className="text-[11px] font-mono font-bold text-[#F4F3EE]">{slotsUsed}/{task.maxWorkers}</span>
+            <span className="text-[9px] font-bold text-[#8A857B] tracking-widest">JOINED</span>
+          </div>
+          <div className="w-px h-5 bg-[#2C2C29]" />
+          <div className="flex items-center gap-1.5 px-2">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#10B981]" />
+            <span className="text-[11px] font-mono font-bold text-[#10B981]">{verifiedCount}</span>
+            <span className="text-[9px] font-bold text-[#8A857B] tracking-widest">VERIFIED</span>
+          </div>
+          <div className="w-px h-5 bg-[#2C2C29]" />
+          <div className="flex items-center gap-1.5 px-2">
+            <Coins className="w-3.5 h-3.5 text-[#F59E0B]" />
+            <span className="text-[11px] font-mono font-bold text-[#F59E0B]">{paidOutCount}</span>
+            <span className="text-[9px] font-bold text-[#8A857B] tracking-widest">PAID</span>
+          </div>
+
+          {/* Status pill for requester */}
+          {isRequester && reviewQueue.length > 0 && (
+            <>
+              <div className="w-px h-5 bg-[#2C2C29]" />
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#10B981]/15 border border-[#10B981]/40 rounded-lg animate-pulse">
+                <Zap className="w-3.5 h-3.5 text-[#10B981]" />
+                <span className="text-[10px] font-black text-[#10B981] tracking-widest">
+                  {reviewQueue.length} TO REVIEW
+                </span>
+              </div>
+            </>
+          )}
+
+          {/* Worker self-status */}
+          {!isRequester && mySubmission && (
+            <>
+              <div className="w-px h-5 bg-[#2C2C29]" />
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#1A1A18] border border-[#2C2C29] rounded-lg">
+                <div
+                  className={
+                    "w-1.5 h-1.5 rounded-full " +
+                    (mySubmission.status === "EXECUTING"
+                      ? "bg-[#3B82F6] animate-pulse"
+                      : mySubmission.status === "SUBMITTED"
+                        ? "bg-[#F59E0B] animate-pulse"
+                        : mySubmission.status === "VERIFIED"
+                          ? "bg-[#10B981]"
+                          : mySubmission.status === "PAID_OUT"
+                            ? "bg-[#10B981]"
+                            : mySubmission.status === "REJECTED"
+                              ? "bg-[#EF4444]"
+                              : "bg-[#8A857B]")
+                  }
+                />
+                <span className="text-[10px] font-black text-[#F4F3EE] tracking-widest">
+                  YOU · {mySubmission.status}
+                </span>
+              </div>
+            </>
+          )}
+
+          {/* Requester quick-CTAs */}
+          {isRequester && reviewQueue.length > 0 && (
+            <>
+              <div className="w-px h-5 bg-[#2C2C29]" />
+              {reviewQueue.some((s) => s.status === "VERIFIED") && (
+                <button
+                  onClick={() => setShowPayoutOverlay(true)}
+                  className="px-3 py-1.5 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-black text-[10px] rounded-lg tracking-widest flex items-center gap-1.5 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                >
+                  <Coins className="w-3 h-3" />
+                  PAY ALL
+                </button>
+              )}
+              <button
+                onClick={() => setShowActionCenter(true)}
+                className="px-3 py-1.5 bg-[#F4F3EE] hover:bg-white text-[#0A0A0A] font-black text-[10px] rounded-lg tracking-widest flex items-center gap-1.5"
+              >
+                <Zap className="w-3 h-3" />
+                REVIEW QUEUE
+              </button>
+            </>
+          )}
+
+          {/* Refund CTA for requester with rejected slots */}
+          {isRequester && eligibleForRefund.length > 0 && refundedCount < eligibleForRefund.length && (
+            <>
+              <div className="w-px h-5 bg-[#2C2C29]" />
+              <button
+                onClick={handleRefund}
+                disabled={!!refundingId}
+                className="px-3 py-1.5 bg-[#8A857B]/20 hover:bg-[#8A857B]/30 text-[#B1ADA1] border border-[#8A857B]/30 font-bold text-[10px] rounded-lg tracking-widest flex items-center gap-1.5"
+              >
+                {refundingId ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock className="w-3 h-3" />}
+                REFUND
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 6. Action Center for Requester (Bottom Floating) */}
+      {isRequester && reviewQueue.length > 0 && showActionCenter && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-40 w-full max-w-3xl pointer-events-auto">
+          <div className="bg-[#0A0A0A]/95 backdrop-blur-xl border-2 border-[#10B981]/50 rounded-2xl p-5 shadow-[0_0_50px_rgba(16,185,129,0.15)]">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-black text-[#10B981] tracking-widest flex items-center gap-2">
+                <Zap className="w-5 h-5 animate-pulse" />
+                ACTION REQUIRED: {reviewQueue.length} WORKER(S) AWAITING REVIEW
+              </h3>
+              <div className="flex items-center gap-2">
+                {reviewQueue.some((s) => s.status === "VERIFIED") && (
+                  <button
+                    onClick={() => setShowPayoutOverlay(true)}
+                    className="px-3 py-1.5 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-black text-[10px] rounded-lg tracking-widest flex items-center gap-1.5 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                  >
+                    <Coins className="w-3 h-3" />
+                    PAY ALL VERIFIED
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowActionCenter(false)}
+                  className="p-1.5 hover:bg-[#2C2C29] rounded-md transition-colors text-[#8A857B]"
+                  aria-label="Close review queue"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 max-h-[35vh] overflow-y-auto custom-scrollbar pr-2">
+              {reviewQueue.map(sub => {
+                const isVerified = sub.status === "VERIFIED";
+                return (
+                  <div key={sub.id} className="flex items-center justify-between bg-[#121211] p-4 rounded-xl border border-[#2C2C29]">
+                    <div className="flex-1 pr-4">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <p className="text-xs font-mono text-[#8A857B]">Worker: {formatAddress(sub.workerAddress)}</p>
+                        <span
+                          className={
+                            "text-[9px] font-black tracking-widest px-1.5 py-0.5 rounded " +
+                            (isVerified
+                              ? "bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30"
+                              : "bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/30")
+                          }
+                        >
+                          {isVerified ? "VERIFIED · PAY TO RELEASE" : "AWAITING DECISION"}
+                        </span>
+                      </div>
+                      <p className="text-sm text-[#F4F3EE] line-clamp-2">{sub.resultText || "No text provided"}</p>
+                    </div>
+                    <div className="flex items-center gap-3 border-l border-[#2C2C29] pl-4">
+                      <button
+                        onClick={() => handleOverride(sub.id, "REJECT")}
+                        disabled={!!overridingId}
+                        className="px-4 py-2.5 bg-[#EF4444]/10 hover:bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444]/30 font-bold text-xs rounded-xl transition-all flex items-center gap-2"
+                      >
+                        {overridingId === sub.id + "REJECT" && <Loader2 className="w-4 h-4 animate-spin" />}
+                        REJECT
+                      </button>
+                      <button
+                        onClick={() => handleOverride(sub.id, "APPROVE")}
+                        disabled={!!overridingId}
+                        className="px-5 py-2.5 bg-[#10B981] hover:bg-[#34D399] text-[#0A0A0A] font-black text-xs rounded-xl transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.4)]"
+                      >
+                        {overridingId === sub.id + "APPROVE" ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Coins className="w-4 h-4" />
+                        )}
+                        {isVerified ? "PAY & APPROVE" : "APPROVE"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
-      {task.status === "COMPLETED" && task.clusterReport && (
-        <SwarmReport report={task.clusterReport} />
+
+      {/* Signature Moment: Swarm Complete Overlay */}
+      {showSwarmComplete && (
+        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-[#0A0A0A]/40 backdrop-blur-[2px]">
+          <div className="animate-in zoom-in-95 duration-700 bg-gradient-to-b from-[#10B981]/20 to-transparent p-12 rounded-full flex flex-col items-center">
+            <div className="w-24 h-24 rounded-full bg-[#10B981] flex items-center justify-center mb-6 shadow-[0_0_100px_rgba(16,185,129,0.8)] animate-pulse">
+              <CheckCircle2 className="w-12 h-12 text-[#0A0A0A]" />
+            </div>
+            <h2 className="text-4xl font-black text-white tracking-widest drop-shadow-[0_0_20px_rgba(16,185,129,0.8)]">SWARM EXECUTED</h2>
+            <p className="text-[#10B981] mt-2 font-mono uppercase font-bold tracking-widest text-sm">Settlement Finalized on Monad</p>
+          </div>
+        </div>
       )}
+      
+      {/* Payout Confirmation Modal */}
+      {showPayoutOverlay && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto">
+          <div className="bg-[#121211] border border-[#2C2C29] p-6 rounded-2xl max-w-sm w-full shadow-2xl">
+            <h3 className="text-lg font-bold text-white mb-2">Release Escrow?</h3>
+            {payoutStatusText ? (
+              <div className="flex flex-col items-center justify-center py-6 gap-3">
+                <Loader2 className="w-8 h-8 text-[#10B981] animate-spin" />
+                <p className="text-sm text-[#F4F3EE] font-mono">{payoutStatusText}</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-[#B1ADA1] mb-6">
+                  You are about to release {formatMon((eligibleForPayout.length * parseFloat(task.rewardWeiPerWorker)).toString())} MON to {eligibleForPayout.length} verified nodes.
+                </p>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowPayoutOverlay(false)} className="flex-1 py-2.5 rounded-xl border border-[#3A3A36] text-[#F4F3EE] font-bold text-xs hover:bg-[#1A1A18]">CANCEL</button>
+                  <button onClick={() => handleReleasePayout(true)} disabled={!!payingOutId} className="flex-1 py-2.5 rounded-xl bg-[#10B981] text-white font-bold text-xs hover:bg-[#34D399] flex justify-center items-center gap-2">
+                    <Coins className="w-4 h-4" />
+                    CONFIRM
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
