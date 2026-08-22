@@ -7,12 +7,17 @@ import {
   http,
   type WalletClient,
   type PublicClient,
+  getAddress,
 } from "viem";
 import abi from "./HumanTaskEscrow.abi.json";
 import { monadTestnet } from "./chain";
 
-export const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
-  "0x3aB8749cD941F48C8b5773172E9D840888BEb1Fe") as Address;
+const rawAddress =
+  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
+  "0x0000000000000000000000000000000000000000";
+
+// Safely normalize to exact EIP-55 checksum address
+export const CONTRACT_ADDRESS: Address = getAddress(rawAddress.toLowerCase());
 
 export const HUMAN_TASK_ESCROW_ABI = abi as Abi;
 
