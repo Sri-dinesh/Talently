@@ -4,6 +4,7 @@ import path from "path";
 import { prisma } from "./prisma";
 import type { Task, User, TaskStatus } from "@/types/task";
 import type { SwarmTask, SwarmSubmission, SwarmStatus, SwarmSubmissionStatus } from "@/types/swarm";
+import type { FloorGame } from "@/types/floor";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const TASKS_FILE = path.join(DATA_DIR, "tasks.json");
@@ -11,12 +12,15 @@ const USERS_FILE = path.join(DATA_DIR, "users.json");
 const SWARM_TASKS_FILE = path.join(DATA_DIR, "swarm_tasks.json");
 const SWARM_SUBMISSIONS_FILE = path.join(DATA_DIR, "swarm_submissions.json");
 
+const FLOOR_GAMES_FILE = path.join(DATA_DIR, "floor_games.json");
+
 // Global in-memory store shared across all Next.js server route closures
 const globalForMemory = globalThis as unknown as {
   memoryTasks: Map<string, Task> | undefined;
   memoryUsers: Map<string, User> | undefined;
   memorySwarmTasks: Map<string, SwarmTask> | undefined;
   memorySwarmSubmissions: Map<string, SwarmSubmission> | undefined;
+  memoryFloorGames: Map<string, FloorGame> | undefined;
   dbDisabled: boolean | undefined;
 };
 
@@ -28,11 +32,14 @@ const memorySwarmTasks: Map<string, SwarmTask> =
   globalForMemory.memorySwarmTasks ?? new Map<string, SwarmTask>();
 const memorySwarmSubmissions: Map<string, SwarmSubmission> =
   globalForMemory.memorySwarmSubmissions ?? new Map<string, SwarmSubmission>();
+const memoryFloorGames: Map<string, FloorGame> =
+  globalForMemory.memoryFloorGames ?? new Map<string, FloorGame>();
 
 globalForMemory.memoryTasks = memoryTasks;
 globalForMemory.memoryUsers = memoryUsers;
 globalForMemory.memorySwarmTasks = memorySwarmTasks;
 globalForMemory.memorySwarmSubmissions = memorySwarmSubmissions;
+globalForMemory.memoryFloorGames = memoryFloorGames;
 
 // Hydrate from persistent disk store on startup
 function loadFromDisk(): void {
@@ -88,6 +95,19 @@ function loadFromDisk(): void {
   } catch {
     // ignore
   }
+
+  try {
+    if (fs.existsSync(FLOOR_GAMES_FILE)) {
+      const raw = fs.readFileSync(FLOOR_GAMES_FILE, "utf-8");
+      const games: FloorGame[] = JSON.parse(raw);
+      memoryFloorGames.clear();
+      for (const g of games) {
+        memoryFloorGames.set(g.id, g);
+      }
+    }
+  } catch {
+    // ignore
+  }
 }
 
 // Persist memory store to disk
@@ -114,6 +134,11 @@ function saveToDisk(): void {
     fs.writeFileSync(
       SWARM_SUBMISSIONS_FILE,
       JSON.stringify(Array.from(memorySwarmSubmissions.values()), null, 2),
+      "utf-8"
+    );
+    fs.writeFileSync(
+      FLOOR_GAMES_FILE,
+      JSON.stringify(Array.from(memoryFloorGames.values()), null, 2),
       "utf-8"
     );
   } catch {
@@ -831,6 +856,47 @@ export const db = {
     memorySwarmSubmissions.set(id, updated);
     saveToDisk();
     return updated;
+  },
+
+  // ---------------- Floor Is Lying Game Methods ----------------
+  async createFloorGame(game: FloorGame): Promise<FloorGame> {
+    loadFromDisk();
+    memoryFloorGames.set(game.id, game);
+    saveToDisk();
+    return game;
+  },
+
+  async getFloorGame(id: string): Promise<FloorGame | null> {
+    loadFromDisk();
+    return memoryFloorGames.get(id) || null;
+  },
+
+  async listFloorGames(): Promise<FloorGame[]> {
+    loadFromDisk();
+    return Array.from(memoryFloorGames.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  },
+
+  async updateFloorGame(id: string, data: Partial<FloorGame>): Promise<FloorGame> {
+    loadFromDisk();
+    const existing = memoryFloorGames.get(id);
+    if (!existing) throw new Error(`FloorGame ${id} not found`);
+    const updated: FloorGame = {
+      ...existing,
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+    memoryFloorGames.set(id, updated);
+    saveToDisk();
+    return updated;
+  },
+
+  async deleteFloorGame(id: string): Promise<boolean> {
+    loadFromDisk();
+    const deleted = memoryFloorGames.delete(id);
+    if (deleted) saveToDisk();
+    return deleted;
   },
 };
 
