@@ -1,0 +1,53 @@
+// src/types/task.ts
+
+export type TaskStatus =
+  | "PENDING_CHAIN"
+  | "OPEN"
+  | "PENDING_ACCEPT"
+  | "ACCEPTED"
+  | "PENDING_SUBMIT"
+  | "SUBMITTED"
+  | "PENDING_APPROVE"
+  | "APPROVED"
+  | "CANCELLED"
+  | "FAILED";
+
+export interface User {
+  address: string;
+  displayName: string | null;
+  skills: string[];
+  tasksCompleted: number;
+  tasksApproved: number;
+  isAvailable: boolean;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface Task {
+  id: string;
+  onChainId: string | number | bigint | null;
+  title: string;
+  description: string;
+  category: string | null;
+  skills: string[];
+  rewardWei: string; // Stored as decimal string to avoid BigInt JSON serialization errors
+  estimatedMinutes: number | null;
+  status: TaskStatus;
+
+  requesterAddress: string;
+  requester?: User;
+  providerAddress: string | null;
+  provider?: User | null;
+
+  resultText: string | null;
+  resultSeverity: "Low" | "Medium" | "High" | string | null;
+  resultAttachmentUrl: string | null;
+
+  createTxHash: string | null;
+  acceptTxHash: string | null;
+  submitTxHash: string | null;
+  approveTxHash: string | null;
+
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}

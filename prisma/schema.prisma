@@ -1,0 +1,72 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskStatus {
+  PENDING_CHAIN   // DB row exists, createTask() tx not yet confirmed
+  OPEN            // escrow locked on-chain, awaiting a provider to accept
+  PENDING_ACCEPT  // acceptTask() tx submitted, not yet confirmed
+  ACCEPTED        // provider assigned on-chain, work in progress
+  PENDING_SUBMIT  // submitResult() tx submitted, not yet confirmed
+  SUBMITTED       // result recorded on-chain, awaiting requester approval
+  PENDING_APPROVE // approveTask() tx submitted, not yet confirmed
+  APPROVED        // paid out on-chain, terminal success state
+  CANCELLED       // requester cancelled before acceptance, refunded
+  FAILED          // chain tx reverted or timed out — terminal failure state, never silently retried
+}
+
+model User {
+  address         String    @id                          // lowercase EIP-55-normalized wallet address, PK
+  displayName     String?
+  skills          String[]  @default([])                  // e.g. ["React","Testing","UI"]
+  tasksCompleted  Int       @default(0)                    // cached from on-chain tasksCompleted mapping
+  tasksApproved   Int       @default(0)                    // cached from on-chain tasksApproved mapping
+  isAvailable     Boolean   @default(false)                 // self-toggled, drives "Available Now" grid
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tasksRequested  Task[]    @relation("requester")
+  tasksProvided   Task[]    @relation("provider")
+
+  @@index([isAvailable, skills])
+}
+
+model Task {
+  id                String     @id @default(cuid())
+  onChainId         BigInt?    @unique                     // set once createTask() tx confirms; null before that
+  title             String
+  description       String
+  category          String?                                // "Technical" | "Design" | "Knowledge" | "Testing" | "Social" | "Local" — from classify() or manual
+  skills            String[]  @default([])
+  rewardWei         String                                  // numeric string, NOT BigInt/Int — see rationale below
+  estimatedMinutes  Int?
+  status            TaskStatus @default(PENDING_CHAIN)
+
+  requesterAddress  String
+  requester         User       @relation("requester", fields: [requesterAddress], references: [address])
+  providerAddress   String?
+  provider          User?      @relation("provider", fields: [providerAddress], references: [address])
+
+  resultText        String?
+  resultSeverity    String?                                  // "Low" | "Medium" | "High" — for the Testing demo category
+  resultAttachmentUrl String?
+
+  createTxHash      String?
+  acceptTxHash      String?
+  submitTxHash      String?
+  approveTxHash     String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status])
+  @@index([requesterAddress])
+  @@index([providerAddress])
+}
