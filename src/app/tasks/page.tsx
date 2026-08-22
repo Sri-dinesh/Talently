@@ -27,7 +27,7 @@ const STATUS_FILTERS: { label: string; value: string }[] = [
   { label: "Open Only", value: "OPEN" },
   { label: "In Progress", value: "ACCEPTED" },
   { label: "Under Review", value: "SUBMITTED" },
-  { label: "Completed", value: "APPROVED" },
+  { label: "Paid Out / Completed", value: "APPROVED" },
 ];
 
 export default function TasksPage() {

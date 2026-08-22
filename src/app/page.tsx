@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   let initialTasks: any[] = [];
   try {
-    initialTasks = await db.getTasks({ status: "OPEN", limit: 6 });
+    initialTasks = await db.getTasks({ limit: 6 });
   } catch {
     // Graceful fallback
   }
@@ -183,19 +183,19 @@ export default async function HomePage() {
       <AvailableNowGrid />
 
       {/* ========================================================================= */}
-      {/* 3. LIVE OPEN TASKS STREAM */}
+      {/* 3. LIVE TASKS STREAM */}
       {/* ========================================================================= */}
       <section className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl sm:text-2xl font-semibold text-[#1A1A18] dark:text-[#F4F3EE] flex items-center gap-2.5">
-              <span>Open Tasks Stream</span>
+              <span>Live Tasks Stream</span>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium bg-[#2E7D32]/10 text-[#2E7D32] dark:text-[#4CAF50] border border-[#2E7D32]/20">
                 Live on Monad
               </span>
             </h2>
             <p className="text-xs text-[#8A857B] dark:text-[#7D7970] mt-1">
-              Claim an open task, submit your verified findings, and receive instant MON payouts.
+              Browse active, under-review, and verified paid out micro-tasks on Monad Testnet.
             </p>
           </div>
 
@@ -203,7 +203,7 @@ export default async function HomePage() {
             href="/tasks"
             className="text-xs font-medium text-[#C15F3C] dark:text-[#D97757] hover:underline flex items-center gap-1"
           >
-            <span>View All Tasks</span>
+            <span>Explore All Tasks</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
           </Link>
         </div>
